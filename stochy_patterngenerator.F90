@@ -21,7 +21,7 @@ module stochy_patterngenerator_mod
     real(kind_dbl_prec), public :: dt
     real(kind_dbl_prec), public :: phi
     real(kind_dbl_prec), public :: stdev
-    real(kind_evod), allocatable, dimension(:), public :: varspectrum, varspectrum1d, lap
+    real(kind_evod), allocatable, dimension(:), public :: varspectrum, lap
     integer, allocatable, dimension(:), public ::&
        degree,order,idx_e,idx_o
     integer, allocatable, dimension(:,:), public :: idx
@@ -131,7 +131,6 @@ module stochy_patterngenerator_mod
       rpattern(np)%phi = exp(-delt/tscale(np))
       rpattern(np)%stdev = stdev(np)
       allocate(rpattern(np)%varspectrum(ndimspec))
-      allocate(rpattern(np)%varspectrum1d(0:ntrunc))
       ! seed computed on root, then bcast to all tasks and set.
       if (is_master()) then
 !         read(ens_nam(2:3),'(i2)') member_id
@@ -176,7 +175,7 @@ module stochy_patterngenerator_mod
    integer, intent(in) :: npatterns
    integer n
    do n=1,npatterns
-   deallocate(rpattern(n)%varspectrum,rpattern(n)%varspectrum1d)
+   deallocate(rpattern(n)%varspectrum)
    deallocate(rpattern(n)%degree,rpattern(n)%order,rpattern(n)%lap)
    deallocate(rpattern(n)%idx,rpattern(n)%idx_e,rpattern(n)%idx_o)
    enddo
@@ -292,22 +291,18 @@ module stochy_patterngenerator_mod
   integer, intent(in) :: varspect_opt
   integer :: n
   complex(kind_evod) noise(ndimspec)
-  real(kind_evod) var,rerth
+  real(kind_evod) var,rerth,inv_rerth_sq
   rerth  =6.3712e+6      ! radius of earth (m)
+  inv_rerth_sq = 1.0/(rerth**2)
   ! 1d variance spectrum (as a function of total wavenumber)
   if (varspect_opt == 0) then ! gaussian
      ! rpattern%lengthscale is interpreted as an efolding length
      ! scale, in meters.
-     do n=0,ntrunc
-        rpattern%varspectrum1d(n) = exp(-rpattern%lengthscale**2*(float(n)*(float(n)+1.))/(4.*rerth**2))
-     enddo
      ! scaling factors for spectral coeffs of white noise pattern with unit variance
-     rpattern%varspectrum = sqrt(ntrunc*exp(rpattern%lengthscale**2*rpattern%lap/(4.*rerth**2)))
+     !rpattern%varspectrum = sqrt(ntrunc*exp(rpattern%lengthscale**2*rpattern%lap/(4.*rerth**2)))
+     rpattern%varspectrum = ntrunc*exp((rpattern%lengthscale*0.25)**2*rpattern%lap*inv_rerth_sq)
   else if (varspect_opt == 1) then ! power law
      ! rpattern%lengthscale is interpreted as a power, not a length.
-     do n=0,ntrunc
-        rpattern%varspectrum1d(n) = float(n)**(rpattern%lengthscale)
-     enddo
      ! scaling factors for spectral coeffs of white noise pattern with unit variance
      rpattern%varspectrum = sqrt(ntrunc*(rpattern%degree**(rpattern%lengthscale)))
   endif
@@ -325,7 +320,6 @@ module stochy_patterngenerator_mod
   noise = rpattern%varspectrum*noise
   call computevarspec(rpattern,noise,var)
   rpattern%varspectrum = rpattern%varspectrum/sqrt(var)
-  rpattern%varspectrum1d = rpattern%varspectrum1d/var
 
  end subroutine setvarspect
 
