@@ -23,7 +23,6 @@
       use spectral_layout_mod,only:lon_dims_a, num_parthds_stochy => ompthreads
       use stochy_resol_def
       use stochy_namelist_def
-      use fv_mp_mod, only : is_master
       use stochy_gg_def, only : wgt_a,sinlat_a,coslat_a,colrad_a,wgtcs_a,rcs2_a,lats_nodes_h,global_lats_h
       use getcon_spectral_mod, only: getcon_spectral
       use get_ls_node_stochy_mod, only: get_ls_node_stochy
@@ -91,20 +90,12 @@
       allocate(wgtcs_a(latg2))
       allocate(rcs2_a(latg2))
 
-!      if (is_master()) then
-!        print*,'number of threads is',num_parthds_stochy
-!        print*,'number of mpi procs is',nodes
-!      endif
-!
       ls_dim = (jcap1-1)/nodes+1
-!      print*,'allocating lonsperlat',latg
       allocate(gis_stochy%lonsperlat(latg))
-!      print*,'size=',size(gis_stochy%lonsperlat)
 
 
       inquire (file="lonsperlat.dat", exist=file_exists)
       if ( .not. file_exists ) then
-        !call mpp_error(FATAL,'Requested lonsperlat.dat  data file does not exist')
          gis_stochy%lonsperlat(:)=lonf
       else
         open (iunit,file='lonsperlat.dat',status='old',form='formatted',      &

@@ -18,7 +18,9 @@
       use machine
       use spectral_layout_mod, only : num_parthds_stochy => ompthreads
       !or : use fv_mp_mod ?
+#ifndef STOCHY_UNIT_TEST
       use mpp_mod, only: mpp_npes, mpp_alltoall, mpp_get_current_pelist
+#endif
 
       implicit none
 !
@@ -34,6 +36,9 @@
 !
       real(kind=kind_dbl_prec) plnev(len_trie_ls,latl2)
       real(kind=kind_dbl_prec) plnod(len_trio_ls,latl2)
+#ifdef STOCHY_UNIT_TEST
+      include 'mpif.h'
+#endif
 !
       integer              ls_node(ls_dim,3)
 !
@@ -92,9 +97,11 @@
       arrsz=2*nvars*ls_dim*workdim*nodes
       num_threads     = min(num_parthds_stochy,nvars)
       nvar_thread_max = (nvars+num_threads-1)/num_threads
+#ifndef STOCHY_UNIT_TEST
       npes = mpp_npes()
       allocate(pelist(0:npes-1))
       call mpp_get_current_pelist(pelist)
+#endif
       kpts   = 0
 !     write(0,*)' londi=',londi,'nvarsdim=',nvarsdim,'workdim=',workdim
 !
@@ -122,12 +129,13 @@
 !
 !           compute the sum of the even real      terms for each level
 !           compute the sum of the even imaginary terms for each level
-!
+!#ifdef STOCHY_UNIT_TEST
 !           call dgemm('t','n',latl2-lat1+1, 2*(nvar_2-nvar_1+1),
 !     &                 (jcap+2-l)/2,cons1,     !constant
 !     &                 plnev(indev,lat1), len_trio_ls,
 !     &                 flnev(indev,2*nvar_1-1),len_trio_ls,cons0,
 !     &                 apev(2*nvar_1-1,lat1),latl2)
+!#else
              call esmf_dgemm(
      &                   't',
      &                   'n',
@@ -143,15 +151,18 @@
      &                   apev(2*nvar_1-1,lat1),
      &                   2*nvars
      &                   )
+!#endif
 !
 !           compute the sum of the odd real      terms for each level
 !           compute the sum of the odd imaginary terms for each level
 !
+!#ifdef STOCHY_UNIT_TEST
 !           call dgemm('t','n',latl2-lat1+1, 2*(nvar_2-nvar_1+1),
 !     &                 (jcap+2-l)/2,cons1,     !constant
 !     &                 plnod(indod,lat1), len_trio_ls,
 !     &                 flnod(indod,2*nvar_1-1),len_trio_ls,cons0,
 !     &                 apod(2*nvar_1-1,lat1), latl2)
+!#else
               call esmf_dgemm(
      &                   't',
      &                   'n',
@@ -167,6 +178,7 @@
      &                   apod(2*nvar_1-1,lat1),
      &                   2*nvars
      &                   )
+!#endif
 !
             endif
           enddo   ! end of thread loop ..................................
@@ -244,10 +256,17 @@ ccxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
          recvcounts(node) = kptr(node) * n2
          sdispls(node)    = (node-1)   * n2 * ls_dim * workdim
       end do
+      print*,'before mpi_alltoallv',nodes,sendcounts(:)
+#ifdef STOCHY_UNIT_TEST
+      call mpi_alltoallv(works,sendcounts,sdispls,mpi_real4,
+     &                   workr,recvcounts,sdispls,mpi_real4,
+     &                   mpi_comm_world,ierr)
+#else  
       work1dr(1:arrsz)=>workr
       work1ds(1:arrsz)=>works
       call mpp_alltoall(work1ds, sendcounts, sdispls,
      &                  work1dr,recvcounts,sdispls,pelist)
+#endif
       nullify(work1dr)
       nullify(work1ds)
 !$omp parallel do private(j,lat,lmax,nvar,lval,n2,lonl,nv)

@@ -9,7 +9,6 @@ public :: init_stochastic_physics, run_stochastic_physics
 contains
 
 subroutine init_stochastic_physics(Model, Init_parm, ntasks, nthreads)
-use fv_mp_mod, only : is_master
 use stochy_internal_state_mod
 use stochy_data_mod, only : nshum,rpattern_shum,init_stochdata,rpattern_sppt,nsppt,rpattern_skeb,nskeb,gg_lats,gg_lons,&
                             rad2deg,INTTYP,wlon,rnlat,gis_stochy,vfact_skeb,vfact_sppt,vfact_shum,skeb_vpts,skeb_vwts,sl
@@ -17,9 +16,12 @@ use stochy_resol_def , only : latg,lonf,skeblevs
 use stochy_gg_def,only : colrad_a
 use stochy_namelist_def
 use physcons, only: con_pi
-use spectral_layout_mod,only:me,ompthreads
-use mpp_mod
+use spectral_layout_mod,only:me,ompthreads,nodes
+#ifdef STOCHY_UNIT_TEST
+ use standalone_stochy_module,   only: GFS_control_type, GFS_init_type
+# else
 use GFS_typedefs,       only: GFS_control_type, GFS_init_type
+#endif
 
 implicit none
 type(GFS_control_type),   intent(inout) :: Model
@@ -31,7 +33,7 @@ integer :: nblks
 integer :: iret
 real*8 :: PRSI(Model%levs),PRSL(Model%levs),dx
 real, allocatable :: skeb_vloc(:)
-integer :: k,kflip,latghf,nodes,blk,k2
+integer :: k,kflip,latghf,blk,k2
 character*2::proc
 
 ! Set/update shared variables in spectral_layout_mod
@@ -40,7 +42,7 @@ ompthreads  = nthreads
 ! ------------------------------------------
 
 nblks = size(Model%blksz)
-
+print*,' in init_stochastic_physics',ntasks, nthreads
 ! replace
 rad2deg=180.0/con_pi
 INTTYP=0 ! bilinear interpolation
@@ -85,7 +87,6 @@ if ( (.NOT. do_sppt) .AND. (.NOT. do_shum) .AND. (.NOT. do_skeb)  .AND. (.NOT. d
 allocate(sl(Model%levs))
 do k=1,Model%levs
    sl(k)= 0.5*(Init_parm%ak(k)/101300.+Init_parm%bk(k)+Init_parm%ak(k+1)/101300.0+Init_parm%bk(k+1)) ! si are now sigmas
-!   if(is_master())print*,'sl(k)',k,sl(k),Init_parm%ak(k),Init_parm%bk(k)
 enddo
 if (do_sppt) then
    allocate(vfact_sppt(Model%levs))
@@ -102,7 +103,7 @@ if (do_sppt) then
        vfact_sppt(2)=vfact_sppt(3)*0.5
        vfact_sppt(1)=0.0
    endif
-   if (is_master()) then
+   if (me==0) then
       do k=1,MOdel%levs
          print *,'sppt vert profile',k,sl(k),vfact_sppt(k)
       enddo
@@ -122,7 +123,7 @@ if (do_skeb) then
       else
           vfact_skeb(k) = 1.0
       endif
-      if (is_master())  print *,'skeb vert profile',k,sl(k),vfact_skeb(k)
+      if (me==0)  print *,'skeb vert profile',k,sl(k),vfact_skeb(k)
    enddo
 ! calculate vertical interpolation weights
    do k=1,skeblevs
@@ -144,7 +145,7 @@ DO k=2,Model%levs-1
    ENDDO
 ENDDO
 deallocate(skeb_vloc)
-if (is_master()) then
+if (me==0) then
 DO k=1,Model%levs
    print*,'skeb vpts ',skeb_vpts(k,1),skeb_vwts(k,2)
 ENDDO
@@ -160,7 +161,7 @@ if (do_shum) then
       if (sl(k).LT. 2*shum_sigefold) then
          vfact_shum(k)=0.0
       endif
-      if (is_master())  print *,'shum vert profile',k,sl(k),vfact_shum(k)
+      if (me==0)  print *,'shum vert profile',k,sl(k),vfact_shum(k)
    enddo
 endif
 ! get interpolation weights
@@ -189,7 +190,6 @@ RNLAT=gg_lats(1)*2-gg_lats(2)
 end subroutine init_stochastic_physics
 
 subroutine run_stochastic_physics(Model, Grid, Coupling, nthreads)
-use fv_mp_mod, only : is_master
 use stochy_internal_state_mod
 use stochy_data_mod, only : nshum,rpattern_shum,rpattern_sppt,nsppt,rpattern_skeb,nskeb,&
                             rad2deg,INTTYP,wlon,rnlat,gis_stochy,vfact_sppt,vfact_shum,vfact_skeb
@@ -197,8 +197,11 @@ use get_stochy_pattern_mod,only : get_random_pattern_fv3,get_random_pattern_fv3_
 use stochy_resol_def , only : latg,lonf
 use stochy_namelist_def
 use spectral_layout_mod,only:me,ompthreads
-use mpp_mod
+#ifdef STOCHY_UNIT_TEST
+use standalone_stochy_module,   only: GFS_control_type, GFS_grid_type, GFS_Coupling_type
+#else
 use GFS_typedefs,       only: GFS_control_type, GFS_grid_type, GFS_Coupling_type
+#endif
 implicit none
 type(GFS_control_type),   intent(in) :: Model
 type(GFS_grid_type),      intent(in) :: Grid(:)
@@ -285,14 +288,16 @@ public :: run_stochastic_physics_sfc
 contains
 
 subroutine run_stochastic_physics_sfc(Model, Grid, Coupling)
-use fv_mp_mod, only : is_master
 use stochy_internal_state_mod
 use stochy_data_mod, only : rad2deg,INTTYP,wlon,rnlat,gis_stochy, rpattern_sfc,npsfc                      ! mg, sfc-perts
 use get_stochy_pattern_mod,only : get_random_pattern_sfc_fv3                                              ! mg, sfc-perts
 use stochy_resol_def , only : latg,lonf
 use stochy_namelist_def
-!use mpp_mod
+#ifdef STOCHY_UNIT_TEST
+  use standalone_stochy_module,   only: GFS_control_type, GFS_grid_type, GFS_Coupling_type
+#else
 use GFS_typedefs,       only: GFS_control_type, GFS_grid_type, GFS_Coupling_type
+#endif
 implicit none
 type(GFS_control_type),   intent(in) :: Model
 type(GFS_grid_type),      intent(in) :: Grid(:)
@@ -312,7 +317,7 @@ nblks = size(Model%blksz)
 maxlen = maxval(Model%blksz(:))
 
 allocate(tmpsfc_wts(nblks,maxlen,Model%nsfcpert))  ! mg, sfc-perts
-if (is_master()) then
+if (Model%me==0) then
   print*,'In init_stochastic_physics: do_sfcperts ',do_sfcperts
 endif
 call get_random_pattern_sfc_fv3(rpattern_sfc,npsfc,gis_stochy,Model,Grid,nblks,maxlen,tmpsfc_wts)
@@ -322,7 +327,7 @@ DO blk=1,nblks
       Coupling(blk)%sfc_wts(:,k)=tmpsfc_wts(blk,1:len,k)
    ENDDO
 ENDDO
-if (is_master()) then
+if (Model%me==0) then
    print*,'tmpsfc_wts(blk,1,:) =',tmpsfc_wts(1,1,1),tmpsfc_wts(1,1,2),tmpsfc_wts(1,1,3),tmpsfc_wts(1,1,4),tmpsfc_wts(1,1,5)
    print*,'min(tmpsfc_wts(:,:,:)) =',minval(tmpsfc_wts(:,:,:))
 endif

@@ -3,10 +3,12 @@ module stochy_patterngenerator_mod
  ! generate random patterns with specified temporal and spatial auto-correlation
  ! in spherical harmonic space.
  use machine
- use spectral_layout_mod, only: len_trie_ls, len_trio_ls, ls_dim, ls_max_node
+ use spectral_layout_mod, only: len_trie_ls, len_trio_ls, ls_dim, ls_max_node,me
 ! use mersenne_twister_stochy, only: random_setseed,random_gauss,random_stat
  use mersenne_twister, only: random_setseed,random_gauss,random_stat
- use fv_mp_mod,only: is_master, mp_bcst
+#ifndef STOCHY_UNIT_TEST
+ use mpp_mod, only: mpp_npes, mpp_broadcast, mpp_get_current_pelist,mpp_root_pe
+#endif
  implicit none
  private
 
@@ -37,6 +39,9 @@ module stochy_patterngenerator_mod
  subroutine patterngenerator_init(lscale, delt, tscale, stdev, iseed, rpattern,&
                                   nlon, nlat, jcap, ls_node, npatterns,&
                                   nlevs, varspect_opt)
+#ifdef STOCHY_UNIT_TEST
+      include 'mpif.h'
+#endif
    real(kind_dbl_prec), intent(in),dimension(npatterns) :: lscale,tscale,stdev
    real, intent(in) :: delt
    integer, intent(in) :: nlon,nlat,jcap,npatterns,varspect_opt
@@ -47,6 +52,8 @@ module stochy_patterngenerator_mod
    integer(8) count, count_rate, count_max, count_trunc
    integer(8) :: iscale = 10000000000
    integer count4, ierr
+   integer :: npes
+   integer,                allocatable :: pelist(:)
 !   integer  member_id
    integer indlsod,indlsev,jbasev,jbasod
    include 'function_indlsod'
@@ -132,7 +139,7 @@ module stochy_patterngenerator_mod
       rpattern(np)%stdev = stdev(np)
       allocate(rpattern(np)%varspectrum(ndimspec))
       ! seed computed on root, then bcast to all tasks and set.
-      if (is_master()) then
+      if (me==0) then
 !         read(ens_nam(2:3),'(i2)') member_id
 !         print *,'ens_nam,member_id',trim(ens_nam),member_id
          if (iseed(np) == 0) then
@@ -153,12 +160,20 @@ module stochy_patterngenerator_mod
          endif
       endif
       ! broadcast seed to all tasks.
-      call mp_bcst(count4)
+#ifdef STOCHY_UNIT_TEST
+      call mpi_bcast( count4,1, mpi_integer,mpi_root,mpi_comm_world )
+#else
+      npes = mpp_npes()
+      allocate(pelist(0:npes-1))
+      call mpp_get_current_pelist(pelist)
+      call mpp_broadcast( count4, mpp_root_pe(),pelist )
+      deallocate(pelist)
+#endif
       rpattern(np)%seed = count4
       ! set seed (to be the same) on all tasks. Save random state.
       call random_setseed(rpattern(np)%seed,rpattern(np)%rstate)
       if (varspect_opt .ne. 0 .and. varspect_opt .ne. 1) then
-         if (is_master()) then
+         if (me==0) then
             print *,'WARNING: illegal value for varspect_opt (should be 0 or 1), using 0 (gaussian spectrum)...'
          endif
          call setvarspect(rpattern(np),0)
@@ -300,6 +315,7 @@ module stochy_patterngenerator_mod
      ! scale, in meters.
      ! scaling factors for spectral coeffs of white noise pattern with unit variance
      !rpattern%varspectrum = sqrt(ntrunc*exp(rpattern%lengthscale**2*rpattern%lap/(4.*rerth**2)))
+     !fix for proper lengthscale  
      rpattern%varspectrum = ntrunc*exp((rpattern%lengthscale*0.25)**2*rpattern%lap*inv_rerth_sq)
   else if (varspect_opt == 1) then ! power law
      ! rpattern%lengthscale is interpreted as a power, not a length.

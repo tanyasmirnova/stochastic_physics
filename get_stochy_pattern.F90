@@ -13,16 +13,25 @@ module get_stochy_pattern_mod
  use stochy_patterngenerator_mod, only: random_pattern, ndimspec,           &
                                         patterngenerator_advance
  use stochy_internal_state_mod, only: stochy_internal_state
- use fv_mp_mod, only : mp_reduce_sum,is_master
+
+#ifndef STOCHY_UNIT_TEST
+ use fv_mp_mod, only : mp_reduce_sum
  use GFS_typedefs,       only: GFS_control_type, GFS_grid_type
+# else
+ use standalone_stochy_module,   only: GFS_control_type, GFS_grid_type
+#endif
  use mersenne_twister, only: random_seed
  use dezouv_stochy_mod, only: dezouv_stochy
  use dozeuv_stochy_mod, only: dozeuv_stochy
  use four_to_grid_mod, only: four_to_grid
  use sumfln_stochy_mod, only: sumfln_stochy
+use spectral_layout_mod,only:me
  implicit none
  private
 
+#ifdef STOCHY_UNIT_TEST
+      include 'mpif.h'
+#endif
  public  get_random_pattern_fv3,get_random_pattern_fv3_vect
  public  get_random_pattern_sfc_fv3
  public  dump_patterns
@@ -46,7 +55,7 @@ subroutine get_random_pattern_fv3(rpattern,npatterns,&
  integer :: num2d
 ! logical lprint
 
- real(kind=kind_dbl_prec), allocatable, dimension(:,:) :: workg
+ real(kind=kind_dbl_prec), allocatable, dimension(:,:) :: workg,workg2
  real (kind=kind_dbl_prec)   glolal(lonf,gis_stochy%lats_node_a)
  integer kmsk0(lonf,gis_stochy%lats_node_a),len
  real(kind=kind_dbl_prec) :: globalvar,globalvar0
@@ -76,7 +85,16 @@ subroutine get_random_pattern_fv3(rpattern,npatterns,&
      enddo
   enddo
 
+#ifdef STOCHY_UNIT_TEST
+   allocate(workg2(lonf,latg))
+   workg2 = 0.
+   call MPI_ALLREDUCE( workg, workg2, lonf*latg, MPI_REAL, MPI_SUM, &
+                             MPI_COMM_WORLD, ierr )
+   workg=workg2
+   deallocate(workg2)
+#else 
    call mp_reduce_sum(workg,lonf,latg)
+#endif
 
 ! interpolate to cube grid
 
@@ -114,7 +132,7 @@ subroutine get_random_pattern_sfc_fv3(rpattern,npatterns,&
  integer :: num2d
 ! logical lprint
 
- real(kind=kind_dbl_prec), allocatable, dimension(:,:) :: workg
+ real(kind=kind_dbl_prec), allocatable, dimension(:,:) :: workg,workg2
  real (kind=kind_dbl_prec)   glolal(lonf,gis_stochy%lats_node_a)
  integer kmsk0(lonf,gis_stochy%lats_node_a),len
  real(kind=kind_dbl_prec) :: globalvar,globalvar0
@@ -127,7 +145,7 @@ subroutine get_random_pattern_sfc_fv3(rpattern,npatterns,&
    kmsk0 = 0
    glolal = 0.
    do n=1,npatterns
-     if (is_master()) print *, 'Random pattern for SFC-PERTS in get_random_pattern_sfc_fv3: k, min, max ',k,minval(rpattern_sfc(n)%spec_o(:,:,k)), maxval(rpattern_sfc(n)%spec_o(:,:,k))
+     if (me==0) print *, 'Random pattern for SFC-PERTS in get_random_pattern_sfc_fv3: k, min, max ',k,minval(rpattern_sfc(n)%spec_o(:,:,k)), maxval(rpattern_sfc(n)%spec_o(:,:,k))
      call scalarspect_to_gaugrid(                       &
          rpattern(n)%spec_e(:,:,k),rpattern(n)%spec_o(:,:,k),wrk2d,&
          gis_stochy%ls_node,gis_stochy%ls_nodes,gis_stochy%max_ls_nodes,&
@@ -145,8 +163,17 @@ subroutine get_random_pattern_sfc_fv3(rpattern,npatterns,&
      enddo
    enddo
 
+#ifdef STOCHY_UNIT_TEST
+   allocate(workg2(lonf,latg))
+   workg2 = 0.
+   call MPI_ALLREDUCE( workg, workg2, lonf*latg, MPI_REAL, MPI_SUM, &
+                             MPI_COMM_WORLD, ierr )
+   workg=workg2
+   deallocate(workg2)
+#else 
    call mp_reduce_sum(workg,lonf,latg)
-   if (is_master()) print *, 'workg after mp_reduce_sum for SFC-PERTS in get_random_pattern_sfc_fv3: k, min, max ',k,minval(workg), maxval(workg)
+#endif
+   if (me==0) print *, 'workg after mp_reduce_sum for SFC-PERTS in get_random_pattern_sfc_fv3: k, min, max ',k,minval(workg), maxval(workg)
 
 ! interpolate to cube grid
 
@@ -161,7 +188,7 @@ subroutine get_random_pattern_sfc_fv3(rpattern,npatterns,&
       pattern_3d(blk,:,k)=pattern_1d(:)
       end associate
    enddo
-   if (is_master()) print *, '3D pattern for SFC-PERTS in get_random_pattern_sfc_fv3: k, min, max ',k,minval(pattern_3d(:,:,k)), maxval(pattern_3d(:,:,k))
+   if (me==0) print *, '3D pattern for SFC-PERTS in get_random_pattern_sfc_fv3: k, min, max ',k,minval(pattern_3d(:,:,k)), maxval(pattern_3d(:,:,k))
    deallocate(rslmsk)
    deallocate(workg)
 
@@ -194,7 +221,7 @@ subroutine get_random_pattern_fv3_vect(rpattern,npatterns,&
  integer :: num2d
 ! logical lprint
 
- real, allocatable, dimension(:,:) :: workgu,workgv
+ real, allocatable, dimension(:,:) :: workgu,workgv,workg2
  integer kmsk0(lonf,gis_stochy%lats_node_a),i1,i2,j1
  real(kind=kind_dbl_prec) :: globalvar,globalvar0
  kmsk0 = 0
@@ -231,8 +258,21 @@ subroutine get_random_pattern_fv3_vect(rpattern,npatterns,&
           enddo
        enddo
     enddo
+#ifdef STOCHY_UNIT_TEST
+   allocate(workg2(lonf,latg))
+   workg2 = 0.
+   call MPI_ALLREDUCE( workgu, workg2, lonf*latg, MPI_REAL, MPI_SUM, &
+                             MPI_COMM_WORLD, ierr )
+   workgu=workg2
+   workg2 = 0.
+   call MPI_ALLREDUCE( workgv, workg2, lonf*latg, MPI_REAL, MPI_SUM, &
+                             MPI_COMM_WORLD, ierr )
+   workgv=workg2
+   deallocate(workg2)
+#else 
     call mp_reduce_sum(workgu,lonf,latg)
     call mp_reduce_sum(workgv,lonf,latg)
+#endif
 ! interpolate to cube grid
     do blk=1,nblks
        len=size(Grid(blk)%xlat,1)
@@ -289,8 +329,21 @@ subroutine get_random_pattern_fv3_vect(rpattern,npatterns,&
        enddo
     enddo
  enddo
+#ifdef STOCHY_UNIT_TEST
+   allocate(workg2(lonf,latg))
+   workg2 = 0.
+   call MPI_ALLREDUCE( workgu, workg2, lonf*latg, MPI_REAL, MPI_SUM, &
+                             MPI_COMM_WORLD, ierr )
+   workgu=workg2
+   workg2 = 0.
+   call MPI_ALLREDUCE( workgv, workg2, lonf*latg, MPI_REAL, MPI_SUM, &
+                             MPI_COMM_WORLD, ierr )
+   workgv=workg2
+   deallocate(workg2)
+#else 
  call mp_reduce_sum(workgu,lonf,latg)
  call mp_reduce_sum(workgv,lonf,latg)
+#endif
 ! interpolate to cube grid
  do blk=1,nblks
     len=size(Grid(blk)%xlat,1)
@@ -377,7 +430,7 @@ subroutine dump_patterns(sfile)
     character*120 :: sfile
     integer :: stochlun,k,n
     stochlun=99
-    if (is_master()) then
+    if (me==0) then
        if (nsppt > 0 .OR. nshum > 0 .OR. nskeb > 0) then
           OPEN(stochlun,file=sfile,form='unformatted')
           print*,'open ',sfile,' for output'
@@ -406,7 +459,7 @@ subroutine dump_patterns(sfile)
    implicit none
    type(random_pattern), intent(inout) :: rpattern
    integer, intent(in) :: lunptn,lev
-   real(kind_dbl_prec), allocatable  :: pattern2d(:)
+   real(kind_dbl_prec), allocatable  :: pattern2d(:),pattern2d2(:)
    integer nm,nn,ierr,arrlen,isize
    integer,allocatable :: isave(:)
    arrlen=2*ndimspec
@@ -428,9 +481,17 @@ subroutine dump_patterns(sfile)
       pattern2d(nm)          = rpattern%spec_o(nn,1,lev)
       pattern2d(ndimspec+nm) = rpattern%spec_o(nn,2,lev)
    enddo
+#ifdef STOCHY_UNIT_TEST
+   allocate(pattern2d2(arrlen))
+   pattern2d2 = 0.
+   call MPI_ALLREDUCE(pattern2d, pattern2d2, arrlen, MPI_REAL, MPI_SUM, &
+                             MPI_COMM_WORLD, ierr )
+   pattern2d=pattern2d2
+#else 
    call mp_reduce_sum(pattern2d,arrlen)
+#endif
   !  write only on root process
-   if (is_master()) then
+   if (me==0) then
       print*,'writing out random pattern (min/max/size)',&
       minval(pattern2d),maxval(pattern2d),size(pattern2d)
       !print*,'max/min pattern=',maxval(pattern2d),minval(pattern2d)
