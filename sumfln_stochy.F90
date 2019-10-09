@@ -4,17 +4,16 @@
 
       contains
 
-      subroutine sumfln_stochy(flnev,flnod,lat1s,plnev,plnod,
-     &                         nvars,ls_node,latl2,
-     &                         workdim,nvarsdim,four_gr,
-     &                         ls_nodes,max_ls_nodes,
-     &                         lats_nodes,global_lats,
-     &                         lats_node,ipt_lats_node,
-     &                         lons_lat,londi,latl,nvars_0)
+      subroutine sumfln_stochy(flnev,flnod,lat1s,plnev,plnod, &
+                               nvars,ls_node,latl2, &
+                               workdim,nvarsdim,four_gr, &
+                               ls_nodes,max_ls_nodes, &
+                               lats_nodes,global_lats, &
+                               lats_node,ipt_lats_node, &
+                               lons_lat,londi,latl,nvars_0)
 !
       use stochy_resol_def , only : jcap,latgd
-      use spectral_layout_mod   , only : len_trie_ls,len_trio_ls,
-     &                               ls_dim,ls_max_node,me,nodes
+      use spectral_layout_mod   , only : len_trie_ls,len_trio_ls,ls_dim,ls_max_node,me,nodes
       use machine
       use spectral_layout_mod, only : num_parthds_stochy => ompthreads
       !or : use fv_mp_mod ?
@@ -36,11 +35,11 @@
 !
       real(kind=kind_dbl_prec) plnev(len_trie_ls,latl2)
       real(kind=kind_dbl_prec) plnod(len_trio_ls,latl2)
+!
+      integer              ls_node(ls_dim,3)
 #ifdef STOCHY_UNIT_TEST
       include 'mpif.h'
 #endif
-!
-      integer              ls_node(ls_dim,3)
 !
 !cmr  ls_node(1,1) ... ls_node(ls_max_node,1) : values of L
 !cmr  ls_node(1,2) ... ls_node(ls_max_node,2) : values of jbasev
@@ -55,12 +54,10 @@
 !    ------------
 !
       real(kind=kind_dbl_prec), dimension(nvars*2,latl2) ::  apev, apod
-      integer               num_threads, nvar_thread_max, nvar_1, nvar_2
-     &,                     thread
+      integer               num_threads, nvar_thread_max, nvar_1, nvar_2, thread
 ! xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 !
-      integer              nvarsdim,  latl, workdim, londi
-     &,                    lats_node, ipt_lats_node
+      integer              nvarsdim,  latl, workdim, londi,lats_node, ipt_lats_node
 !
       real(kind=kind_dbl_prec) four_gr(londi,nvarsdim,workdim)
 !
@@ -70,13 +67,9 @@
 
 !jfe  integer              global_lats(latg+2*jintmx+2*nypt*(nodes-1))
 !
-      real(kind=4),target,dimension(2,nvars,ls_dim*workdim,nodes)::
-     &                               workr,works
-!      real(kind=4),dimension(2*nvars*ls_dim*workdim*nodes)::
-!     &                               work1dr,work1ds
+      real(kind=4),target,dimension(2,nvars,ls_dim*workdim,nodes):: workr,works
       real(kind=4),pointer:: work1dr(:),work1ds(:)
-      integer, dimension(jcap+1) :: kpts, kptr, sendcounts, recvcounts,
-     &                              sdispls
+      integer, dimension(jcap+1) :: kpts, kptr, sendcounts, recvcounts,  sdispls
 !
       integer              ierr,ilat,ipt_ls, lmax,lval,i,jj,lonl,nv
       integer              node,nvar,arrsz
@@ -103,6 +96,7 @@
       call mpp_get_current_pelist(pelist)
 #endif
       kpts   = 0
+      !print*,'in sumfln',npes
 !     write(0,*)' londi=',londi,'nvarsdim=',nvarsdim,'workdim=',workdim
 !
       do j = 1, ls_max_node   ! start of do j loop #####################
@@ -129,56 +123,18 @@
 !
 !           compute the sum of the even real      terms for each level
 !           compute the sum of the even imaginary terms for each level
-!#ifdef STOCHY_UNIT_TEST
-!           call dgemm('t','n',latl2-lat1+1, 2*(nvar_2-nvar_1+1),
-!     &                 (jcap+2-l)/2,cons1,     !constant
-!     &                 plnev(indev,lat1), len_trio_ls,
-!     &                 flnev(indev,2*nvar_1-1),len_trio_ls,cons0,
-!     &                 apev(2*nvar_1-1,lat1),latl2)
-!#else
-             call esmf_dgemm(
-     &                   't',
-     &                   'n',
-     &                    n2,
-     &                   latl2-lat1+1,
-     &                   (jcap+3-l)/2,
-     &                   cons1,
-     &                   flnev(indev,2*nvar_1-1),
-     &                   len_trie_ls,
-     &                   plnev(indev,lat1),
-     &                   len_trie_ls,
-     &                   cons0,
-     &                   apev(2*nvar_1-1,lat1),
-     &                   2*nvars
-     &                   )
-!#endif
+             call esmf_dgemm('t','n', n2, latl2-lat1+1, (jcap+3-l)/2, &
+                             cons1,flnev(indev,2*nvar_1-1),len_trie_ls,&
+                             plnev(indev,lat1),len_trie_ls, cons0, &
+                             apev(2*nvar_1-1,lat1),2*nvars)
 !
 !           compute the sum of the odd real      terms for each level
 !           compute the sum of the odd imaginary terms for each level
 !
-!#ifdef STOCHY_UNIT_TEST
-!           call dgemm('t','n',latl2-lat1+1, 2*(nvar_2-nvar_1+1),
-!     &                 (jcap+2-l)/2,cons1,     !constant
-!     &                 plnod(indod,lat1), len_trio_ls,
-!     &                 flnod(indod,2*nvar_1-1),len_trio_ls,cons0,
-!     &                 apod(2*nvar_1-1,lat1), latl2)
-!#else
-              call esmf_dgemm(
-     &                   't',
-     &                   'n',
-     &                   n2,
-     &                   latl2-lat1+1,
-     &                  (jcap+2-l)/2,
-     &                   cons1,
-     &                   flnod(indod,2*nvar_1-1),
-     &                   len_trio_ls,
-     &                   plnod(indod,lat1),
-     &                   len_trio_ls,
-     &                   cons0,
-     &                   apod(2*nvar_1-1,lat1),
-     &                   2*nvars
-     &                   )
-!#endif
+              call esmf_dgemm('t','n',n2,latl2-lat1+1,(jcap+2-l)/2, &
+                             cons1, flnod(indod,2*nvar_1-1),len_trio_ls,&
+                             plnod(indod,lat1),len_trio_ls, cons0,&
+                             apod(2*nvar_1-1,lat1), 2*nvars)
 !
             endif
           enddo   ! end of thread loop ..................................
@@ -190,7 +146,7 @@
           enddo   ! end of thread loop ..................................
         endif !-----------------------------------------------------------
 !
-ccxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+!cxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 !
 !       compute the fourier coefficients for each level
 !       -----------------------------------------------
@@ -214,19 +170,15 @@ ccxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 !                                                northern hemisphere
                 do nvar=1,nvars
                   n2 = nvar + nvar
-                  works(1,nvar,kn,node) = apev(n2-1,ipt_ls)
-     &                                  + apod(n2-1,ipt_ls)
-                  works(2,nvar,kn,node) = apev(n2,  ipt_ls)
-     &                                  + apod(n2,  ipt_ls)
+                  works(1,nvar,kn,node) = apev(n2-1,ipt_ls) + apod(n2-1,ipt_ls)
+                  works(2,nvar,kn,node) = apev(n2,  ipt_ls) + apod(n2,  ipt_ls)
                 enddo
               else
 !                                                southern hemisphere
                 do nvar=1,nvars
                   n2 = nvar + nvar
-                  works(1,nvar,kn,node) = apev(n2-1,ipt_ls)
-     &                                  - apod(n2-1,ipt_ls)
-                  works(2,nvar,kn,node) = apev(n2,  ipt_ls)
-     &                                  - apod(n2,  ipt_ls)
+                  works(1,nvar,kn,node) = apev(n2-1,ipt_ls) - apod(n2-1,ipt_ls)
+                  works(2,nvar,kn,node) = apev(n2,  ipt_ls) - apod(n2,  ipt_ls)
                 enddo
               endif
             endif
@@ -256,16 +208,18 @@ ccxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
          recvcounts(node) = kptr(node) * n2
          sdispls(node)    = (node-1)   * n2 * ls_dim * workdim
       end do
-      print*,'before mpi_alltoallv',nodes,sendcounts(:)
 #ifdef STOCHY_UNIT_TEST
-      call mpi_alltoallv(works,sendcounts,sdispls,mpi_real4,
-     &                   workr,recvcounts,sdispls,mpi_real4,
-     &                   mpi_comm_world,ierr)
+      !print*,'before mpi_alltoallv'
+      call mpi_alltoallv(works,sendcounts,sdispls,mpi_real4, &
+                         workr,recvcounts,sdispls,mpi_real4, &
+                         mpi_comm_world,ierr)
+      !print*,'after mpi_alltoallv',ierr
 #else  
+      !print*,'before mpp_alltoall'
       work1dr(1:arrsz)=>workr
       work1ds(1:arrsz)=>works
-      call mpp_alltoall(work1ds, sendcounts, sdispls,
-     &                  work1dr,recvcounts,sdispls,pelist)
+      call mpp_alltoall(work1ds, sendcounts, sdispls, &
+                        work1dr,recvcounts,sdispls,pelist)
 #endif
       nullify(work1dr)
       nullify(work1ds)
