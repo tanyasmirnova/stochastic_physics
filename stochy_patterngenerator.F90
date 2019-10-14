@@ -38,7 +38,7 @@ module stochy_patterngenerator_mod
 
  subroutine patterngenerator_init(lscale, delt, tscale, stdev, iseed, rpattern,&
                                   nlon, nlat, jcap, ls_node, npatterns,&
-                                  nlevs, varspect_opt)
+                                  nlevs, varspect_opt,new_lscale)
 #ifdef STOCHY_UNIT_TEST
       include 'mpif.h'
 #endif
@@ -46,6 +46,7 @@ module stochy_patterngenerator_mod
    real, intent(in) :: delt
    integer, intent(in) :: nlon,nlat,jcap,npatterns,varspect_opt
    integer, intent(in) :: ls_node(ls_dim,3),nlevs
+   logical, intent(in) :: new_lscale
    type(random_pattern), intent(out), dimension(npatterns) :: rpattern
    integer(8), intent(inout) :: iseed(npatterns)
    integer m,j,l,n,nm,nn,np,indev1,indev2,indod1,indod2
@@ -176,9 +177,9 @@ module stochy_patterngenerator_mod
          if (me==0) then
             print *,'WARNING: illegal value for varspect_opt (should be 0 or 1), using 0 (gaussian spectrum)...'
          endif
-         call setvarspect(rpattern(np),0)
+         call setvarspect(rpattern(np),0,new_lscale)
       else
-         call setvarspect(rpattern(np),varspect_opt)
+         call setvarspect(rpattern(np),varspect_opt,new_lscale)
       endif
    enddo ! n=1,npatterns
  end subroutine patterngenerator_init
@@ -299,11 +300,12 @@ module stochy_patterngenerator_mod
     enddo
  end subroutine patterngenerator_advance
 
- subroutine setvarspect(rpattern,varspect_opt)
+ subroutine setvarspect(rpattern,varspect_opt,new_lscale)
  ! define variance spectrum (isotropic covariance)
  ! normalized to unit global variance
   type(random_pattern), intent(inout) :: rpattern
   integer, intent(in) :: varspect_opt
+  logical, intent(in) :: new_lscale
   integer :: n
   complex(kind_evod) noise(ndimspec)
   real(kind_evod) var,rerth,inv_rerth_sq
@@ -314,9 +316,12 @@ module stochy_patterngenerator_mod
      ! rpattern%lengthscale is interpreted as an efolding length
      ! scale, in meters.
      ! scaling factors for spectral coeffs of white noise pattern with unit variance
-     !rpattern%varspectrum = sqrt(ntrunc*exp(rpattern%lengthscale**2*rpattern%lap/(4.*rerth**2)))
-     !fix for proper lengthscale  
-     rpattern%varspectrum = ntrunc*exp((rpattern%lengthscale*0.25)**2*rpattern%lap*inv_rerth_sq)
+     if (new_lscale) then
+        !fix for proper lengthscale  
+        rpattern%varspectrum = ntrunc*exp((rpattern%lengthscale*0.25)**2*rpattern%lap*inv_rerth_sq)
+     else
+        rpattern%varspectrum = sqrt(ntrunc*exp(rpattern%lengthscale**2*rpattern%lap/(4.*rerth**2)))
+     endif
   else if (varspect_opt == 1) then ! power law
      ! rpattern%lengthscale is interpreted as a power, not a length.
      ! scaling factors for spectral coeffs of white noise pattern with unit variance

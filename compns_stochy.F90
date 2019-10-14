@@ -50,7 +50,7 @@ module compns_stochy_mod
 ! - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 !
       namelist /nam_stochy/ntrunc,lon_s,lat_s,sppt,sppt_tau,sppt_lscale,sppt_logit, &
-      iseed_shum,iseed_sppt,shum,shum_tau,&
+      iseed_shum,iseed_sppt,shum,shum_tau,new_lscale,&
       shum_lscale,fhstoch,stochini,skeb_varspect_opt,sppt_sfclimit, &
       skeb,skeb_tau,skeb_vdof,skeb_lscale,iseed_skeb,skeb_vfilt,skeb_diss_smooth, &
       skeb_sigtop1,skeb_sigtop2,skebnorm,sppt_sigtop1,sppt_sigtop2,&
@@ -80,6 +80,7 @@ module compns_stochy_mod
       use_zmtnblck = .false.
       do_shum = .false.
       do_skeb = .false.
+      new_lscale = .false.
       ! mg, sfcperts
       do_sfcperts = .false.
       sppt_land = .false.

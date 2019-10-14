@@ -261,7 +261,6 @@ module getcon_spectral_mod
   200    continue
       end do
 !
-      print*,'jcap,lats_node_a',jcap,lats_node_a
       do j=1,lats_node_a
          lat = global_lats_a(ipt_lats_node_a-1+j)
          if ( lonsperlat(lat) == lonf ) then

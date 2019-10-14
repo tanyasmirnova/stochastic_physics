@@ -32,7 +32,6 @@ SRCS_f   =  \
 		./stochy_layout_lag.f                       \
 		./four_to_grid_stochy.f                     \
 		./glats_stochy.f                            \
-		./sumfln_stochy.f                           \
 		./gozrineo_stochy.f                         \
 		./num_parthds_stochy.f                      \
 		./get_ls_node_stochy.f                      \
@@ -47,6 +46,7 @@ SRCS_f   =  \
 
 SRCS_F90 = \
 		./spectral_layout.F90                       \
+		./sumfln_stochy.F90                         \
 		./getcon_spectral.F90                       \
 		./stochy_namelist_def.F90                   \
 		./compns_stochy.F90                         \
