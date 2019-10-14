@@ -48,6 +48,7 @@ SRCS_F90 = \
 		./spectral_layout.F90                       \
 		./sumfln_stochy.F90                         \
 		./getcon_spectral.F90                       \
+		./sumfln_stochy.F90                         \
 		./stochy_namelist_def.F90                   \
 		./compns_stochy.F90                         \
 		./stochy_internal_state_mod.F90             \
