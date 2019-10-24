@@ -162,7 +162,7 @@ module stochy_patterngenerator_mod
       endif
       ! broadcast seed to all tasks.
 #ifdef STOCHY_UNIT_TEST
-      call mpi_bcast( count4,1, mpi_integer,mpi_root,mpi_comm_world )
+       call mpi_bcast( count4,1, mpi_integer,0,mpi_comm_world,ierr )
 #else
       npes = mpp_npes()
       allocate(pelist(0:npes-1))
@@ -327,6 +327,7 @@ module stochy_patterngenerator_mod
      ! scaling factors for spectral coeffs of white noise pattern with unit variance
      rpattern%varspectrum = sqrt(ntrunc*(rpattern%degree**(rpattern%lengthscale)))
   endif
+  print*,'varspectrum before=',rpattern%varspectrum
   noise = 0.
   do n=1,ndimspec
      if (rpattern%order(n) .ne. 0.) then
@@ -341,6 +342,7 @@ module stochy_patterngenerator_mod
   noise = rpattern%varspectrum*noise
   call computevarspec(rpattern,noise,var)
   rpattern%varspectrum = rpattern%varspectrum/sqrt(var)
+  print*,'varspectrum after=',rpattern%varspectrum,var
 
  end subroutine setvarspect
 

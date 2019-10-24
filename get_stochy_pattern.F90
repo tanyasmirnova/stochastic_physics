@@ -88,7 +88,7 @@ subroutine get_random_pattern_fv3(rpattern,npatterns,&
 #ifdef STOCHY_UNIT_TEST
    allocate(workg2(lonf,latg))
    workg2 = 0.
-   call MPI_ALLREDUCE( workg, workg2, lonf*latg, MPI_REAL, MPI_SUM, &
+   call MPI_ALLREDUCE( workg, workg2, lonf*latg, MPI_REAL8, MPI_SUM, &
                              MPI_COMM_WORLD, ierr )
    workg=workg2
    deallocate(workg2)
@@ -106,6 +106,10 @@ subroutine get_random_pattern_fv3(rpattern,npatterns,&
                  tlons=>Grid(blk)%xlon*rad2deg )
          call stochy_la2ga(workg,lonf,latg,gg_lons,gg_lats,wlon,rnlat,&
                            pattern_1d(1:len),len,rslmsk,tlats,tlons)
+#ifdef STOCHY_UNIT_TEST
+      print*,'workg',maxval(workg),me
+      if (me.EQ.0) write(30) real(workg,kind=4)
+#endif
       pattern_2d(blk,:)=pattern_1d(:)
       end associate
    enddo
@@ -166,7 +170,7 @@ subroutine get_random_pattern_sfc_fv3(rpattern,npatterns,&
 #ifdef STOCHY_UNIT_TEST
    allocate(workg2(lonf,latg))
    workg2 = 0.
-   call MPI_ALLREDUCE( workg, workg2, lonf*latg, MPI_REAL, MPI_SUM, &
+   call MPI_ALLREDUCE( workg, workg2, lonf*latg, MPI_REAL8, MPI_SUM, &
                              MPI_COMM_WORLD, ierr )
    workg=workg2
    deallocate(workg2)
@@ -261,11 +265,11 @@ subroutine get_random_pattern_fv3_vect(rpattern,npatterns,&
 #ifdef STOCHY_UNIT_TEST
    allocate(workg2(lonf,latg))
    workg2 = 0.
-   call MPI_ALLREDUCE( workgu, workg2, lonf*latg, MPI_REAL, MPI_SUM, &
+   call MPI_ALLREDUCE( workgu, workg2, lonf*latg, MPI_REAL8, MPI_SUM, &
                              MPI_COMM_WORLD, ierr )
    workgu=workg2
    workg2 = 0.
-   call MPI_ALLREDUCE( workgv, workg2, lonf*latg, MPI_REAL, MPI_SUM, &
+   call MPI_ALLREDUCE( workgv, workg2, lonf*latg, MPI_REAL8, MPI_SUM, &
                              MPI_COMM_WORLD, ierr )
    workgv=workg2
    deallocate(workg2)
@@ -332,11 +336,11 @@ subroutine get_random_pattern_fv3_vect(rpattern,npatterns,&
 #ifdef STOCHY_UNIT_TEST
    allocate(workg2(lonf,latg))
    workg2 = 0.
-   call MPI_ALLREDUCE( workgu, workg2, lonf*latg, MPI_REAL, MPI_SUM, &
+   call MPI_ALLREDUCE( workgu, workg2, lonf*latg, MPI_REAL8, MPI_SUM, &
                              MPI_COMM_WORLD, ierr )
    workgu=workg2
    workg2 = 0.
-   call MPI_ALLREDUCE( workgv, workg2, lonf*latg, MPI_REAL, MPI_SUM, &
+   call MPI_ALLREDUCE( workgv, workg2, lonf*latg, MPI_REAL8, MPI_SUM, &
                              MPI_COMM_WORLD, ierr )
    workgv=workg2
    deallocate(workg2)
@@ -484,7 +488,7 @@ subroutine dump_patterns(sfile)
 #ifdef STOCHY_UNIT_TEST
    allocate(pattern2d2(arrlen))
    pattern2d2 = 0.
-   call MPI_ALLREDUCE(pattern2d, pattern2d2, arrlen, MPI_REAL, MPI_SUM, &
+   call MPI_ALLREDUCE(pattern2d, pattern2d2, arrlen, MPI_REAL8, MPI_SUM, &
                              MPI_COMM_WORLD, ierr )
    pattern2d=pattern2d2
 #else 

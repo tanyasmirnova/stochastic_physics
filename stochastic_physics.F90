@@ -56,6 +56,7 @@ Model%sppt_amp=sqrt(SUM(sppt(1:nsppt)**2))
 !if(Model%isppt_deep == .true.)then
 !do_sppt = .true.
 !endif
+#ifndef STOCHY_UNIT_TEST
 ! check namelist entries for consistency
 if (Model%do_sppt.neqv.do_sppt) then
    write(0,'(*(a))') 'Logic error in stochastic_physics_init: incompatible', &
@@ -74,6 +75,7 @@ else if (Model%do_sfcperts.neqv.do_sfcperts) then ! mg, sfc-perts
                    & ' namelist settings do_sfcperts and pertz0 / pertshc / pertzt / pertlai / pertvegf / pertalb'
    return
 end if
+#endif
 ! update remaining model configuration parameters from namelist
 Model%use_zmtnblck=use_zmtnblck
 Model%skeb_npass=skeb_npass

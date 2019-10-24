@@ -377,8 +377,8 @@ subroutine read_pattern(rpattern,k,lunptn)
       deallocate(pattern2din)
     endif
 #ifdef STOCHY_UNIT_TEST
-    call mpi_bcast( isave, size(isave), mpi_integer,mpi_root,mpi_comm_world )
-    call mpi_bcast( pattern2d, size(pattern2d),mpi_real,mpi_root,mpi_comm_world )
+    call mpi_bcast( isave, size(isave), mpi_integer,0,mpi_comm_world,ierr)
+    call mpi_bcast( pattern2d, size(pattern2d),mpi_real,0,mpi_comm_world,ierr)
 #else
     npes = mpp_npes()
     allocate(pelist(0:npes-1))

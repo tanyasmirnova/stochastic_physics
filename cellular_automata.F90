@@ -4,17 +4,20 @@ subroutine cellular_automata(kstep,Statein,Coupling,Diag,nblks,nlev, &
 
 use machine
 use update_ca,         only: update_cells
-use atmosphere_mod,    only: atmosphere_resolution, atmosphere_domain, &
+use atmosphere_stub_mod,    only: atmosphere_resolution, atmosphere_domain, &
                              atmosphere_scalar_field_halo, atmosphere_control_data
 use mersenne_twister,  only: random_setseed,random_gauss,random_stat,random_number
+#ifdef STOCHY_UNIT_TEST
+ use standalone_stochy_module,      only: GFS_Coupling_type, GFS_diag_type, GFS_statein_type
+#else
 use GFS_typedefs,      only: GFS_Coupling_type, GFS_diag_type, GFS_statein_type
+#endif
 use mpp_domains_mod,   only: domain2D
 use block_control_mod, only: block_control_type, define_blocks_packed
 use fv_mp_mod,         only : mp_reduce_sum,mp_bcst,mp_reduce_max,is_master
 
 
 implicit none
-
 !L.Bengtsson, 2017-06
 
 !This program evolves a cellular automaton uniform over the globe given
@@ -105,7 +108,6 @@ nca_plumes = .false.
  write(0,*)'Currently ca_smooth does not work with ca_sgs - exiting'
  stop
  endif
-
  call atmosphere_resolution (nlon, nlat, global=.false.)
  isize=nlon+2*halo
  jsize=nlat+2*halo
