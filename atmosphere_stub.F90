@@ -94,7 +94,7 @@ contains
    use omp_lib
 #endif
    type(grid_box_type), intent(inout) :: Grid_box
-   real, pointer, dimension(:,:), intent(inout) :: area
+   real*8, pointer, dimension(:,:), intent(inout) :: area
 !--- local variables ---
    integer :: i, n
 
@@ -220,7 +220,8 @@ contains
      nlast=mod(npass,3)
      do j=1,nloops 
         if (ns_type.EQ.1) then
-           call del2_cubed(wnoise , 0.25*Atm(mytile)%gridstruct%da_min, Atm(mytile)%gridstruct, &
+           !call del2_cubed(wnoise , 0.25*Atm(mytile)%gridstruct%da_min, Atm(mytile)%gridstruct, &
+           call del2_cubed(wnoise , 0.20*Atm(mytile)%gridstruct%da_min, Atm(mytile)%gridstruct, &
                            Atm(mytile)%domain, npx, npy, 1, 3, Atm(mytile)%bd)
         else
            call box_mean(wnoise , Atm(mytile)%gridstruct, Atm(mytile)%domain, Atm(mytile)%npx, Atm(mytile)%npy, 1, 3, Atm(mytile)%bd)
@@ -228,7 +229,8 @@ contains
      enddo
      if(nlast>0) then
         if (ns_type.EQ.1) then
-           call del2_cubed(wnoise , 0.25*Atm(mytile)%gridstruct%da_min, Atm(mytile)%gridstruct, &
+           !call del2_cubed(wnoise , 0.25*Atm(mytile)%gridstruct%da_min, Atm(mytile)%gridstruct, &
+           call del2_cubed(wnoise , 0.20*Atm(mytile)%gridstruct%da_min, Atm(mytile)%gridstruct, &
                            Atm(mytile)%domain, npx, npy, 1, nlast, Atm(mytile)%bd)
         else
            call box_mean(wnoise , Atm(mytile)%gridstruct, Atm(mytile)%domain, Atm(mytile)%npx, Atm(mytile)%npy, 1, nlast, Atm(mytile)%bd)
@@ -274,7 +276,7 @@ contains
       ! This routine is for filtering the omega field for the physics
       !---------------------------------------------------------------
       integer, intent(in):: npx, npy, km, nmax
-      real,   intent(in):: cd            !< cd = K * da_min;   0 < K < 0.25
+      real(kind=8),   intent(in):: cd            !< cd = K * da_min;   0 < K < 0.25
       type(fv_grid_bounds_type), intent(IN) :: bd
       real, intent(inout):: q(bd%isd:bd%ied,bd%jsd:bd%jed,km)
       type(fv_grid_type), intent(IN), target :: gridstruct
@@ -299,15 +301,6 @@ contains
       ied = bd%ied
       jsd = bd%jsd
       jed = bd%jed
-
-!     rarea => gridstruct%rarea
-!     del6_u => gridstruct%del6_u
-!     del6_v => gridstruct%del6_v
-      
-!     sw_corner => gridstruct%sw_corner
-!     nw_corner => gridstruct%nw_corner
-!     se_corner => gridstruct%se_corner
-!     ne_corner => gridstruct%ne_corner
 
       ntimes = min(3, nmax)
 
@@ -355,7 +348,7 @@ contains
 #else
                   fx(i,j) = gridstruct%del6_v(i,j)*(q(i-1,j,k)-q(i,j,k))
 #endif
-               enddo
+                enddo
             enddo
 
             if(nt>0 .and. (.not. gridstruct%regional)) call copy_corners(q(isd,jsd,k), npx, npy, 2, gridstruct%nested, bd, &
@@ -453,8 +446,10 @@ contains
             if(nt>0) call copy_corners(q(isd,jsd,k), npx, npy, 2, gridstruct%nested, bd, &
                  gridstruct%sw_corner, gridstruct%se_corner, gridstruct%nw_corner, gridstruct%ne_corner)
 
-            do j=js-nt,je+nt
-               do i=is-nt,ie+nt
+            !do j=js-nt,je+nt
+            !   do i=is-nt,ie+nt
+            do j=jsd+1,jed-1
+               do i=isd+1,ied-1
                   !q2(i,j) = (gridstruct%area(i-1,j+1)*q(i-1,j+1,k) + gridstruct%area(i,j+1)*q(i,j+1,k) + gridstruct%area(i+1,j+1)*q(i+1,j+1,k) +&
                   !           gridstruct%area(i-1,j  )*q(i-1,j,k)   + gridstruct%area(i,j  )*q(i,j  ,k) + gridstruct%area(i+1,j  )*q(i+1,j  ,k) +&
                   !           gridstruct%area(i-1,j-1)*q(i-1,j-1,k) + gridstruct%area(i,j-1)*q(i,j-1,k) + gridstruct%area(i+1,j-1)*q(i+1,j-1,k))/SUM(gridstruct%area(i-1:i+1,j-1:j+1))

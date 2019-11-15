@@ -21,7 +21,7 @@ type(GFS_init_type)     :: Init_parm
 integer, parameter      :: nlevs=64
 integer                 :: ntasks,fid
 integer                 :: nthreads,omp_get_num_threads
-integer                 :: ncid,xt_dim_id,yt_dim_id,time_dim_id,xt_var_id,yt_var_id,time_var_id,sppt_id
+integer                 :: ncid,xt_dim_id,yt_dim_id,time_dim_id,xt_var_id,yt_var_id,time_var_id,ca_out_id
 character*1             :: strid
 type(GFS_grid_type),allocatable     :: Grid(:)
 type(GFS_diag_type),allocatable :: Diag(:)
@@ -57,6 +57,7 @@ logical,target :: nested
 integer  :: pe,npes,stackmax=4000000
 
 real(kind=4),allocatable,dimension(:,:) :: workg
+real(kind=4),allocatable,dimension(:) :: grid_xt,grid_yt
 real(kind=8),pointer    ,dimension(:,:) :: area
 type(grid_box_type)           :: grid_box
 !type(time_type)               :: Time               ! current time
@@ -161,6 +162,13 @@ allocate(Init_parm%xlon(Model%nx,Model%ny))
 allocate(Init_parm%xlat(Model%nx,Model%ny))
 Init_parm%xlon(:,:)=Atm(1)%gridstruct%agrid(:,:,1)
 Init_parm%xlat(:,:)=Atm(1)%gridstruct%agrid(:,:,2)
+allocate(grid_xt(nx),grid_yt(ny))
+do i=1,nx
+  grid_xt(i)=i
+enddo
+do i=1,ny
+  grid_yt(i)=i
+enddo
 
 !setup GFS_coupling
 allocate(Diag(nblks))
@@ -187,13 +195,15 @@ ierr=NF90_PUT_ATT(ncid,time_var_id,"units","hours since 2014-08-01 00:00:00")
 ierr=NF90_PUT_ATT(ncid,time_var_id,"cartesian_axis","T")
 ierr=NF90_PUT_ATT(ncid,time_var_id,"calendar_type","JULIAN")
 ierr=NF90_PUT_ATT(ncid,time_var_id,"calendar","JULIAN")
-ierr=NF90_DEF_VAR(ncid,"sppt_wts",NF90_FLOAT,(/xt_dim_id, yt_dim_id ,time_dim_id/), sppt_id)
-ierr=NF90_PUT_ATT(ncid,sppt_id,"long_name","random pattern")
-ierr=NF90_PUT_ATT(ncid,sppt_id,"units","None")
-ierr=NF90_PUT_ATT(ncid,sppt_id,"missing_value",undef)
-ierr=NF90_PUT_ATT(ncid,sppt_id,"_FillValue",undef)
-ierr=NF90_PUT_ATT(ncid,sppt_id,"cell_methods","time: point")
+ierr=NF90_DEF_VAR(ncid,"ca_out",NF90_FLOAT,(/xt_dim_id, yt_dim_id ,time_dim_id/), ca_out_id)
+ierr=NF90_PUT_ATT(ncid,ca_out_id,"long_name","random pattern")
+ierr=NF90_PUT_ATT(ncid,ca_out_id,"units","None")
+ierr=NF90_PUT_ATT(ncid,ca_out_id,"missing_value",undef)
+ierr=NF90_PUT_ATT(ncid,ca_out_id,"_FillValue",undef)
+ierr=NF90_PUT_ATT(ncid,ca_out_id,"cell_methods","time: point")
 ierr=NF90_ENDDEF(ncid)
+ierr=NF90_PUT_VAR(ncid,xt_var_id,grid_xt)
+ierr=NF90_PUT_VAR(ncid,yt_var_id,grid_yt)
 ! allocate diagnostics
 DO i =1,nblks
    allocate(Diag(i)%ca_out(blksz))
@@ -216,7 +226,7 @@ DO i =1,nblks
    allocate(Statein(i)%vvl(blksz,nlevs))
    allocate(Statein(i)%prsl(blksz,nlevs))
 ENDDO
-do i=1,1000
+do i=1,50   
    ts=i/4.0
    call cellular_automata(i-1, Statein, Coupling, Diag, &
                           nblks, Model%levs, Model%nca, Model%ncells,          &
@@ -228,7 +238,7 @@ do i=1,1000
       workg(:,j)=Diag(j)%ca_out(:)   
    enddo
    !write(fid) workg
-   ierr=NF90_PUT_VAR(ncid,sppt_id,workg,(/1,1,i/))
+   ierr=NF90_PUT_VAR(ncid,ca_out_id,workg,(/1,1,i/))
    ierr=NF90_PUT_VAR(ncid,time_var_id,ts,(/i/))
    if (my_id.EQ.0) write(6,fmt='(a,i5,4f6.3)') 'ca=',i,Diag(1)%ca_out(1:4)
 enddo

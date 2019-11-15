@@ -102,13 +102,13 @@ if (do_skeb) then
    allocate(skeb_vwts(Model%levs,2)) ! save for later
    allocate(skeb_vpts(Model%levs,2)) ! save for later
    do k=1,Model%levs
-      if (sl(k) .lt. skeb_sigtop1 .and. sl(k) .gt. skeb_sigtop2) then
-         vfact_skeb(k) = (sl(k)-skeb_sigtop2)/(skeb_sigtop1-skeb_sigtop2)
-      else if (sl(k) .lt. skeb_sigtop2) then
-          vfact_skeb(k) = 0.0
-      else
+      !if (sl(k) .lt. skeb_sigtop1 .and. sl(k) .gt. skeb_sigtop2) then
+      !   vfact_skeb(k) = (sl(k)-skeb_sigtop2)/(skeb_sigtop1-skeb_sigtop2)
+      !else if (sl(k) .lt. skeb_sigtop2) then
+      !    vfact_skeb(k) = 0.0
+      !else
           vfact_skeb(k) = 1.0
-      endif
+      !endif
       if (me==0)  print *,'skeb vert profile',k,sl(k),vfact_skeb(k) 
    enddo
 ! calculate vertical interpolation weights

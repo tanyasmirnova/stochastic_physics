@@ -86,7 +86,6 @@ Grid(1)%xlat=Grid(1)%xlat*3.1415928/180.0
 allocate(Coupling(nblks))
 print*,'calling init'
 print*,'my_id=',my_id
-STOP
 if (my_id.EQ.0) open(30,file='workg.out',form='unformatted')
 call init_stochastic_physics(Model, Init_parm, ntasks, nthreads)
 do i=1,nblks
@@ -95,10 +94,11 @@ do i=1,nblks
    if (do_skeb) allocate(Coupling(i)%skebu_wts(blksz,nlevs))
    if (do_skeb) allocate(Coupling(i)%skebv_wts(blksz,nlevs))
 enddo
-do i=1,50
+do i=1,1000
    call run_stochastic_physics(Model, Grid, Coupling, nthreads)
    if (my_id.EQ.0) write(6,fmt='(a,4f6.3)') 'sppt_wts=',Coupling(1)%sppt_wts(:,40)
    if (my_id.EQ.0) print*,'time-step=',i
+   Model%kdt=Model%kdt+1
 enddo
 call mpi_barrier(mpi_comm_world,ierr)
 if(my_id.EQ.0)close(30)

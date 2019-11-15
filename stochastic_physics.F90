@@ -236,6 +236,7 @@ allocate(tmp_wts(nblks,maxlen))
 allocate(tmpu_wts(nblks,maxlen,Model%levs))
 allocate(tmpv_wts(nblks,maxlen,Model%levs))
 if (do_sppt) then
+   print*,'update patthern?',Model%kdt,nssppt
    if (mod(Model%kdt,nssppt) == 1 .or. nssppt == 1) then
       call get_random_pattern_fv3(rpattern_sppt,nsppt,gis_stochy,Model,Grid,nblks,maxlen,tmp_wts)
       DO blk=1,nblks

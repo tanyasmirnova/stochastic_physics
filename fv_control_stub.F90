@@ -134,14 +134,14 @@ module fv_control_stub_mod
 
    use fv_io_mod,           only: fv_io_exit
    use fv_restart_mod,      only: fv_restart_init, fv_restart_end
-   use fv_arrays_mod,       only: fv_atmos_type, allocate_fv_atmos_type, deallocate_fv_atmos_type, &
+   use fv_arrays_mod,  only: fv_atmos_type, allocate_fv_atmos_type, deallocate_fv_atmos_type, &
                                   R_GRID
    use fv_grid_utils_mod,   only: grid_utils_init, grid_utils_end, ptop_min
    use fv_eta_mod,          only: set_eta
    use fv_grid_tools_mod,   only: init_grid
-   use fv_mp_mod,           only: mp_start, mp_assign_gid, domain_decomp
-   use fv_mp_mod,           only: ng, switch_current_Atm
-   use fv_mp_mod,           only: broadcast_domains, mp_barrier, is_master, setup_master
+   use fv_mp_mod,      only: mp_start, mp_assign_gid, domain_decomp
+   use fv_mp_mod,      only: ng, switch_current_Atm
+   use fv_mp_mod,      only: broadcast_domains, mp_barrier, is_master, setup_master
 !!! CLEANUP: should be replaced by a getter function?
    use test_cases_mod,      only: test_case, bubble_do, alpha, nsolitons, soliton_Umax, soliton_size
    use fv_timing_mod,       only: timing_on, timing_off, timing_init, timing_prt
@@ -390,7 +390,7 @@ module fv_control_stub_mod
    call init_nesting(Atm, grids_on_this_pe, p_split)
 
    !This call is needed to set up the pointers for fv_current_grid, even for a single-grid run
-   !call switch_current_Atm(Atm(1), .false.)
+   call switch_current_Atm(Atm(1), .false.)
    call setup_pointers(Atm(1))
 
 ! Start up MPI

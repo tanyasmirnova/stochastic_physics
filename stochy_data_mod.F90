@@ -7,9 +7,7 @@ module stochy_data_mod
  use stochy_namelist_def
  use constants_mod, only : radius
  use spectral_layout_mod, only : me, nodes
-#ifndef STOCHY_UNIT_TEST
  use mpp_mod, only: mpp_npes, mpp_broadcast, mpp_get_current_pelist,mpp_root_pe
-#endif
  use stochy_patterngenerator_mod, only: random_pattern, patterngenerator_init,&
  getnoise, patterngenerator_advance,ndimspec,chgres_pattern,computevarspec_r
  use initialize_spectral_mod, only: initialize_spectral
@@ -19,9 +17,6 @@ module stochy_data_mod
  use compns_stochy_mod, only : compns_stochy
 
  implicit none
-#ifdef STOCHY_UNIT_TEST
- include 'mpif.h'
-#endif
 
  private
  public :: init_stochdata
@@ -376,17 +371,12 @@ subroutine read_pattern(rpattern,k,lunptn)
       endif
       deallocate(pattern2din)
     endif
-#ifdef STOCHY_UNIT_TEST
-    call mpi_bcast( isave, size(isave), mpi_integer,0,mpi_comm_world,ierr)
-    call mpi_bcast( pattern2d, size(pattern2d),mpi_real,0,mpi_comm_world,ierr)
-#else
     npes = mpp_npes()
     allocate(pelist(0:npes-1))
     call mpp_get_current_pelist(pelist)
     call mpp_broadcast( isave, isize, mpp_root_pe(),pelist )
     call mpp_broadcast( pattern2d, 2*ndimspec, mpp_root_pe(),pelist )
     deallocate(pelist)
-#endif
     call random_seed(put=isave,stat=rpattern%rstate)
    ! subset
    do nn=1,len_trie_ls

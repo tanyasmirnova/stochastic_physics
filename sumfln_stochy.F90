@@ -17,9 +17,7 @@
       use machine
       use spectral_layout_mod, only : num_parthds_stochy => ompthreads
       !or : use fv_mp_mod ?
-#ifndef STOCHY_UNIT_TEST
       use mpp_mod, only: mpp_npes, mpp_alltoall, mpp_get_current_pelist
-#endif
 
       implicit none
 !
@@ -37,9 +35,6 @@
       real(kind=kind_dbl_prec) plnod(len_trio_ls,latl2)
 !
       integer              ls_node(ls_dim,3)
-#ifdef STOCHY_UNIT_TEST
-      include 'mpif.h'
-#endif
 !
 !cmr  ls_node(1,1) ... ls_node(ls_max_node,1) : values of L
 !cmr  ls_node(1,2) ... ls_node(ls_max_node,2) : values of jbasev
@@ -90,11 +85,9 @@
       arrsz=2*nvars*ls_dim*workdim*nodes
       num_threads     = min(num_parthds_stochy,nvars)
       nvar_thread_max = (nvars+num_threads-1)/num_threads
-#ifndef STOCHY_UNIT_TEST
       npes = mpp_npes()
       allocate(pelist(0:npes-1))
       call mpp_get_current_pelist(pelist)
-#endif
       kpts   = 0
       !print*,'in sumfln',npes
 !     write(0,*)' londi=',londi,'nvarsdim=',nvarsdim,'workdim=',workdim
@@ -208,19 +201,11 @@
          recvcounts(node) = kptr(node) * n2
          sdispls(node)    = (node-1)   * n2 * ls_dim * workdim
       end do
-#ifdef STOCHY_UNIT_TEST
-      !print*,'before mpi_alltoallv'
-      call mpi_alltoallv(works,sendcounts,sdispls,mpi_real4, &
-                         workr,recvcounts,sdispls,mpi_real4, &
-                         mpi_comm_world,ierr)
-      !print*,'after mpi_alltoallv',ierr
-#else  
       !print*,'before mpp_alltoall'
       work1dr(1:arrsz)=>workr
       work1ds(1:arrsz)=>works
       call mpp_alltoall(work1ds, sendcounts, sdispls, &
                         work1dr,recvcounts,sdispls,pelist)
-#endif
       nullify(work1dr)
       nullify(work1ds)
 !$omp parallel do private(j,lat,lmax,nvar,lval,n2,lonl,nv)

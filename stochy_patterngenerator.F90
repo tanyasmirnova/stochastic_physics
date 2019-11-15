@@ -6,9 +6,7 @@ module stochy_patterngenerator_mod
  use spectral_layout_mod, only: len_trie_ls, len_trio_ls, ls_dim, ls_max_node,me
 ! use mersenne_twister_stochy, only: random_setseed,random_gauss,random_stat
  use mersenne_twister, only: random_setseed,random_gauss,random_stat
-#ifndef STOCHY_UNIT_TEST
  use mpp_mod, only: mpp_npes, mpp_broadcast, mpp_get_current_pelist,mpp_root_pe
-#endif
  implicit none
  private
 
@@ -39,9 +37,6 @@ module stochy_patterngenerator_mod
  subroutine patterngenerator_init(lscale, delt, tscale, stdev, iseed, rpattern,&
                                   nlon, nlat, jcap, ls_node, npatterns,&
                                   nlevs, varspect_opt,new_lscale)
-#ifdef STOCHY_UNIT_TEST
-      include 'mpif.h'
-#endif
    real(kind_dbl_prec), intent(in),dimension(npatterns) :: lscale,tscale,stdev
    real, intent(in) :: delt
    integer, intent(in) :: nlon,nlat,jcap,npatterns,varspect_opt
@@ -137,6 +132,7 @@ module stochy_patterngenerator_mod
       rpattern(np)%lengthscale = lscale(np)
       rpattern(np)%dt = delt
       rpattern(np)%phi = exp(-delt/tscale(np))
+      print*,'calculate tscale',rpattern(np)%phi,delt,tscale(np)
       rpattern(np)%stdev = stdev(np)
       allocate(rpattern(np)%varspectrum(ndimspec))
       ! seed computed on root, then bcast to all tasks and set.
@@ -161,15 +157,11 @@ module stochy_patterngenerator_mod
          endif
       endif
       ! broadcast seed to all tasks.
-#ifdef STOCHY_UNIT_TEST
-       call mpi_bcast( count4,1, mpi_integer,0,mpi_comm_world,ierr )
-#else
       npes = mpp_npes()
       allocate(pelist(0:npes-1))
       call mpp_get_current_pelist(pelist)
       call mpp_broadcast( count4, mpp_root_pe(),pelist )
       deallocate(pelist)
-#endif
       rpattern(np)%seed = count4
       ! set seed (to be the same) on all tasks. Save random state.
       call random_setseed(rpattern(np)%seed,rpattern(np)%rstate)
@@ -327,7 +319,6 @@ module stochy_patterngenerator_mod
      ! scaling factors for spectral coeffs of white noise pattern with unit variance
      rpattern%varspectrum = sqrt(ntrunc*(rpattern%degree**(rpattern%lengthscale)))
   endif
-  print*,'varspectrum before=',rpattern%varspectrum
   noise = 0.
   do n=1,ndimspec
      if (rpattern%order(n) .ne. 0.) then
@@ -342,7 +333,6 @@ module stochy_patterngenerator_mod
   noise = rpattern%varspectrum*noise
   call computevarspec(rpattern,noise,var)
   rpattern%varspectrum = rpattern%varspectrum/sqrt(var)
-  print*,'varspectrum after=',rpattern%varspectrum,var
 
  end subroutine setvarspect
 

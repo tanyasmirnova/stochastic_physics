@@ -14,11 +14,11 @@ module get_stochy_pattern_mod
                                         patterngenerator_advance
  use stochy_internal_state_mod, only: stochy_internal_state
 
-#ifndef STOCHY_UNIT_TEST
  use fv_mp_mod, only : mp_reduce_sum
- use GFS_typedefs,       only: GFS_control_type, GFS_grid_type
+#ifdef STOCHY_UNIT_TEST
+use standalone_stochy_module,   only: GFS_control_type, GFS_grid_type
 # else
- use standalone_stochy_module,   only: GFS_control_type, GFS_grid_type
+use GFS_typedefs,       only: GFS_control_type, GFS_grid_type
 #endif
  use mersenne_twister, only: random_seed
  use dezouv_stochy_mod, only: dezouv_stochy
@@ -29,9 +29,6 @@ use spectral_layout_mod,only:me
  implicit none
  private
 
-#ifdef STOCHY_UNIT_TEST
-      include 'mpif.h'
-#endif
  public  get_random_pattern_fv3,get_random_pattern_fv3_vect
  public  get_random_pattern_sfc_fv3
  public  dump_patterns
@@ -85,16 +82,7 @@ subroutine get_random_pattern_fv3(rpattern,npatterns,&
      enddo
   enddo
 
-#ifdef STOCHY_UNIT_TEST
-   allocate(workg2(lonf,latg))
-   workg2 = 0.
-   call MPI_ALLREDUCE( workg, workg2, lonf*latg, MPI_REAL8, MPI_SUM, &
-                             MPI_COMM_WORLD, ierr )
-   workg=workg2
-   deallocate(workg2)
-#else 
    call mp_reduce_sum(workg,lonf,latg)
-#endif
 
 ! interpolate to cube grid
 
@@ -167,16 +155,7 @@ subroutine get_random_pattern_sfc_fv3(rpattern,npatterns,&
      enddo
    enddo
 
-#ifdef STOCHY_UNIT_TEST
-   allocate(workg2(lonf,latg))
-   workg2 = 0.
-   call MPI_ALLREDUCE( workg, workg2, lonf*latg, MPI_REAL8, MPI_SUM, &
-                             MPI_COMM_WORLD, ierr )
-   workg=workg2
-   deallocate(workg2)
-#else 
    call mp_reduce_sum(workg,lonf,latg)
-#endif
    if (me==0) print *, 'workg after mp_reduce_sum for SFC-PERTS in get_random_pattern_sfc_fv3: k, min, max ',k,minval(workg), maxval(workg)
 
 ! interpolate to cube grid
@@ -262,21 +241,8 @@ subroutine get_random_pattern_fv3_vect(rpattern,npatterns,&
           enddo
        enddo
     enddo
-#ifdef STOCHY_UNIT_TEST
-   allocate(workg2(lonf,latg))
-   workg2 = 0.
-   call MPI_ALLREDUCE( workgu, workg2, lonf*latg, MPI_REAL8, MPI_SUM, &
-                             MPI_COMM_WORLD, ierr )
-   workgu=workg2
-   workg2 = 0.
-   call MPI_ALLREDUCE( workgv, workg2, lonf*latg, MPI_REAL8, MPI_SUM, &
-                             MPI_COMM_WORLD, ierr )
-   workgv=workg2
-   deallocate(workg2)
-#else 
     call mp_reduce_sum(workgu,lonf,latg)
     call mp_reduce_sum(workgv,lonf,latg)
-#endif
 ! interpolate to cube grid
     do blk=1,nblks
        len=size(Grid(blk)%xlat,1)
@@ -333,21 +299,8 @@ subroutine get_random_pattern_fv3_vect(rpattern,npatterns,&
        enddo
     enddo
  enddo
-#ifdef STOCHY_UNIT_TEST
-   allocate(workg2(lonf,latg))
-   workg2 = 0.
-   call MPI_ALLREDUCE( workgu, workg2, lonf*latg, MPI_REAL8, MPI_SUM, &
-                             MPI_COMM_WORLD, ierr )
-   workgu=workg2
-   workg2 = 0.
-   call MPI_ALLREDUCE( workgv, workg2, lonf*latg, MPI_REAL8, MPI_SUM, &
-                             MPI_COMM_WORLD, ierr )
-   workgv=workg2
-   deallocate(workg2)
-#else 
  call mp_reduce_sum(workgu,lonf,latg)
  call mp_reduce_sum(workgv,lonf,latg)
-#endif
 ! interpolate to cube grid
  do blk=1,nblks
     len=size(Grid(blk)%xlat,1)
@@ -485,15 +438,7 @@ subroutine dump_patterns(sfile)
       pattern2d(nm)          = rpattern%spec_o(nn,1,lev)
       pattern2d(ndimspec+nm) = rpattern%spec_o(nn,2,lev)
    enddo
-#ifdef STOCHY_UNIT_TEST
-   allocate(pattern2d2(arrlen))
-   pattern2d2 = 0.
-   call MPI_ALLREDUCE(pattern2d, pattern2d2, arrlen, MPI_REAL8, MPI_SUM, &
-                             MPI_COMM_WORLD, ierr )
-   pattern2d=pattern2d2
-#else 
    call mp_reduce_sum(pattern2d,arrlen)
-#endif
   !  write only on root process
    if (me==0) then
       print*,'writing out random pattern (min/max/size)',&
