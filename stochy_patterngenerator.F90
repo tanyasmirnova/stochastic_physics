@@ -6,7 +6,7 @@ module stochy_patterngenerator_mod
  use spectral_layout_mod, only: len_trie_ls, len_trio_ls, ls_dim, ls_max_node,me
 ! use mersenne_twister_stochy, only: random_setseed,random_gauss,random_stat
  use mersenne_twister, only: random_setseed,random_gauss,random_stat
- use mpp_mod, only: mpp_npes, mpp_broadcast, mpp_get_current_pelist,mpp_root_pe
+ use fv_mp_mod,only: is_master, mp_bcst
  implicit none
  private
 
@@ -48,8 +48,6 @@ module stochy_patterngenerator_mod
    integer(8) count, count_rate, count_max, count_trunc
    integer(8) :: iscale = 10000000000
    integer count4, ierr
-   integer :: npes
-   integer,                allocatable :: pelist(:)
 !   integer  member_id
    integer indlsod,indlsev,jbasev,jbasod
    include 'function_indlsod'
@@ -157,11 +155,7 @@ module stochy_patterngenerator_mod
          endif
       endif
       ! broadcast seed to all tasks.
-      npes = mpp_npes()
-      allocate(pelist(0:npes-1))
-      call mpp_get_current_pelist(pelist)
-      call mpp_broadcast( count4, mpp_root_pe(),pelist )
-      deallocate(pelist)
+      call mp_bcst(count4)
       rpattern(np)%seed = count4
       ! set seed (to be the same) on all tasks. Save random state.
       call random_setseed(rpattern(np)%seed,rpattern(np)%rstate)

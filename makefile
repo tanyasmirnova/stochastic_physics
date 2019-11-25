@@ -21,10 +21,7 @@ FFLAGS   += -I./include -I../FV3/gfsphysics/ -I../FV3/atmos_cubed_sphere -I$(FMS
 
 SRCS_F   =
 
-SRCS_f90 =  \
-                ./cellular_automata.f90                     \
-                ./update_ca.f90                             \
-                ./plumes.f90
+SRCS_f90 =  
 
 SRCS_f   =  \
 		./stochy_gg_def.f                           \
@@ -33,6 +30,7 @@ SRCS_f   =  \
 		./four_to_grid_stochy.f                     \
 		./glats_stochy.f                            \
 		./gozrineo_stochy.f                         \
+ 		./sumfln_stochy.f                           \
 		./num_parthds_stochy.f                      \
 		./get_ls_node_stochy.f                      \
 		./get_lats_node_a_stochy.f                  \
@@ -48,14 +46,16 @@ SRCS_F90 = \
 		./spectral_layout.F90                       \
 		./getcon_spectral.F90                       \
 		./stochy_namelist_def.F90                   \
- 		./sumfln_stochy.F90                         \
 		./compns_stochy.F90                         \
 		./stochy_internal_state_mod.F90             \
 		./stochastic_physics.F90                    \
 		./stochy_patterngenerator.F90               \
 		./stochy_data_mod.F90                       \
 		./get_stochy_pattern.F90                    \
-		./initialize_spectral_mod.F90
+		./initialize_spectral_mod.F90               \
+                ./cellular_automata.f90                     \
+                ./update_ca.f90                             \
+                ./plumes.f90
 
 SRCS_c   =
 

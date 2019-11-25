@@ -12,6 +12,9 @@ type GFS_diag_type
     real (kind=kind_phys), allocatable :: ca_shal  (:)     !< cellular automata fraction
     real (kind=kind_phys), allocatable :: ca_rad   (:)     !< cellular automata fraction
     real (kind=kind_phys), allocatable :: ca_micro (:)     !< cellular automata fraction
+    real (kind=kind_phys), allocatable :: ca1   (:)  
+    real (kind=kind_phys), allocatable :: ca2   (:)  
+    real (kind=kind_phys), allocatable :: ca3   (:)  
 end type GFS_diag_type
 type GFS_control_type
    integer  :: levs,me,nx,ny
@@ -36,7 +39,12 @@ type GFS_control_type
     logical              :: ca_global       !< switch for global ca
     logical              :: ca_smooth       !< switch for gaussian spatial filter
     logical              :: isppt_deep      !< switch for combination with isppt_deep. OBS! Switches off SPPT on other tendencies!
+    logical              :: isppt_pbl
+    logical              :: isppt_shal      !
+    logical              :: pert_flux       !
+    logical              :: pert_trigger    !
     integer              :: iseed_ca        !< seed for random number generation in ca scheme
+    integer              :: ca_amplitude    !< seed for random number generation in ca scheme
     integer              :: nspinup         !< number of iterations to spin up the ca
     real(kind=kind_phys) :: nthresh         !< threshold used for perturbed vertical velocity
 end type GFS_control_type
@@ -74,6 +82,9 @@ type GFS_coupling_type
     real (kind=kind_phys), allocatable :: ca_shal  (:)     !< cellular automata fraction
     real (kind=kind_phys), allocatable :: ca_rad   (:)     !< cellular automata fraction
     real (kind=kind_phys), allocatable :: ca_micro (:)     !< cellular automata fraction
+    real (kind=kind_phys), allocatable :: ca1   (:)  
+    real (kind=kind_phys), allocatable :: ca2   (:)  
+    real (kind=kind_phys), allocatable :: ca3   (:)  
     integer              :: nsfcpert=6                             !< number of sfc perturbations
 end type GFS_coupling_type
 end module standalone_stochy_module

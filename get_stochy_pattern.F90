@@ -52,7 +52,7 @@ subroutine get_random_pattern_fv3(rpattern,npatterns,&
  integer :: num2d
 ! logical lprint
 
- real(kind=kind_dbl_prec), allocatable, dimension(:,:) :: workg,workg2
+ real(kind=kind_dbl_prec), allocatable, dimension(:,:) :: workg
  real (kind=kind_dbl_prec)   glolal(lonf,gis_stochy%lats_node_a)
  integer kmsk0(lonf,gis_stochy%lats_node_a),len
  real(kind=kind_dbl_prec) :: globalvar,globalvar0
@@ -124,7 +124,7 @@ subroutine get_random_pattern_sfc_fv3(rpattern,npatterns,&
  integer :: num2d
 ! logical lprint
 
- real(kind=kind_dbl_prec), allocatable, dimension(:,:) :: workg,workg2
+ real(kind=kind_dbl_prec), allocatable, dimension(:,:) :: workg
  real (kind=kind_dbl_prec)   glolal(lonf,gis_stochy%lats_node_a)
  integer kmsk0(lonf,gis_stochy%lats_node_a),len
  real(kind=kind_dbl_prec) :: globalvar,globalvar0
@@ -204,7 +204,7 @@ subroutine get_random_pattern_fv3_vect(rpattern,npatterns,&
  integer :: num2d
 ! logical lprint
 
- real, allocatable, dimension(:,:) :: workgu,workgv,workg2
+ real, allocatable, dimension(:,:) :: workgu,workgv
  integer kmsk0(lonf,gis_stochy%lats_node_a),i1,i2,j1
  real(kind=kind_dbl_prec) :: globalvar,globalvar0
  kmsk0 = 0
@@ -416,7 +416,7 @@ subroutine dump_patterns(sfile)
    implicit none
    type(random_pattern), intent(inout) :: rpattern
    integer, intent(in) :: lunptn,lev
-   real(kind_dbl_prec), allocatable  :: pattern2d(:),pattern2d2(:)
+   real(kind_dbl_prec), allocatable  :: pattern2d(:)
    integer nm,nn,ierr,arrlen,isize
    integer,allocatable :: isave(:)
    arrlen=2*ndimspec

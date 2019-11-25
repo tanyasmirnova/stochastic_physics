@@ -1,40 +1,39 @@
 #!/bin/sh -x
 FC=mpif90
-compile_all=1
+compile_all=0
+INCS="-I. -I../FV3/gfsphysics/ -I../FMS/include -I../FV3/atmos_cubed_sphere -I../FMS/fv3gfs"
+FLAGS64=" -traceback -real-size 64 -DSTOCHY_UNIT_TEST -c "$INCS
+FLAGS=" -traceback -DSTOCHY_UNIT_TEST -c "$INCS
 if [ $compile_all -eq 1 ];then
-   $FC -traceback -real-size 64 -c ../FV3/gfsphysics/physics/machine.F
-   $FC -traceback -real-size 64 -c ../FV3/gfsphysics/physics/physcons.F90
-   $FC -traceback -real-size 64 -c ../FV3/gfsphysics/physics/mersenne_twister.f
-   $FC -traceback -I../FMS/include -c ../FMS/platform/platform.F90
-   $FC -traceback -nowarn -DGFS_PHYS -I../FMS/include -c ../FMS/constants/constants.F90
-   $FC -traceback -real-size 64 -DSTOCHY_UNIT_TEST -c stochy_namelist_def.F90
-   $FC -traceback -real-size 64 -DSTOCHY_UNIT_TEST -c stochy_resol_def.f
-   $FC -traceback -real-size 64 -DSTOCHY_UNIT_TEST -c stochy_gg_def.f
-   $FC -traceback -real-size 64 -DSTOCHY_UNIT_TEST -c spectral_layout.F90
-   $FC -traceback -real-size 64 -DSTOCHY_UNIT_TEST -c stochy_layout_lag.f
-   $FC -traceback -real-size 64 -DSTOCHY_UNIT_TEST -c pln2eo_stochy.f
-   $FC -traceback -real-size 64 -DSTOCHY_UNIT_TEST -c setlats_a_stochy.f
-   $FC -traceback -real-size 64 -DSTOCHY_UNIT_TEST -c setlats_lag_stochy.f
-   $FC -traceback -real-size 64 -DSTOCHY_UNIT_TEST -c glats_stochy.f
-   $FC -traceback -real-size 64 -DSTOCHY_UNIT_TEST -c gozrineo_stochy.f
-   $FC -traceback -real-size 64 -DSTOCHY_UNIT_TEST -c num_parthds_stochy.f
-   $FC -traceback -real-size 64 -DSTOCHY_UNIT_TEST -c dezouv_stochy.f
-   $FC -traceback -real-size 64 -DSTOCHY_UNIT_TEST -c dozeuv_stochy.f
-   $FC -traceback -real-size 64 -DSTOCHY_UNIT_TEST -c epslon_stochy.f
-   $FC -traceback -real-size 64 -DSTOCHY_UNIT_TEST -c four_to_grid_stochy.f
-   $FC -traceback -real-size 64 -DSTOCHY_UNIT_TEST -c sumfln_stochy.F90
-   $FC -traceback -real-size 64 -DSTOCHY_UNIT_TEST -c get_lats_node_a_stochy.f
-   $FC -traceback -real-size 64 -DSTOCHY_UNIT_TEST -c get_ls_node_stochy.f
-   $FC -traceback -real-size 64 -DSTOCHY_UNIT_TEST -c compns_stochy.F90
-   $FC -traceback -real-size 64 -DSTOCHY_UNIT_TEST -c stochy_internal_state_mod.F90
-   $FC -traceback -real-size 64 -DSTOCHY_UNIT_TEST -c getcon_lag_stochy.f
-   $FC -traceback -real-size 64 -DSTOCHY_UNIT_TEST -c getcon_spectral.F90
-   $FC -traceback -real-size 64 -DSTOCHY_UNIT_TEST -c initialize_spectral_mod.F90
-   $FC -traceback -real-size 64 -DSTOCHY_UNIT_TEST -c standalone_stochy_module.F90
-   $FC -traceback -real-size 64 -DSTOCHY_UNIT_TEST -c stochy_patterngenerator.F90
-   $FC -traceback -real-size 64 -DSTOCHY_UNIT_TEST -c stochy_data_mod.F90
-   $FC -traceback -real-size 64 -DSTOCHY_UNIT_TEST -c get_stochy_pattern.F90
-   $FC -traceback -real-size 64 -DSTOCHY_UNIT_TEST -c stochastic_physics.F90
+   rm -f *.i90 *.i *.o *.mod lib*a
+   $FC ${FLAGS64} stochy_namelist_def.F90
+   $FC ${FLAGS64} stochy_resol_def.f
+   $FC ${FLAGS64} stochy_gg_def.f
+   $FC ${FLAGS64} spectral_layout.F90
+   $FC ${FLAGS64} stochy_layout_lag.f
+   $FC ${FLAGS64} pln2eo_stochy.f
+   $FC ${FLAGS64} setlats_a_stochy.f
+   $FC ${FLAGS64} setlats_lag_stochy.f
+   $FC ${FLAGS64} glats_stochy.f
+   $FC ${FLAGS64} gozrineo_stochy.f
+   $FC ${FLAGS64} num_parthds_stochy.f
+   $FC ${FLAGS64} dezouv_stochy.f
+   $FC ${FLAGS64} dozeuv_stochy.f
+   $FC ${FLAGS64} epslon_stochy.f
+   $FC ${FLAGS64} four_to_grid_stochy.f
+   $FC ${FLAGS64} sumfln_stochy.f
+   $FC ${FLAGS64} get_lats_node_a_stochy.f
+   $FC ${FLAGS64} get_ls_node_stochy.f
+   $FC ${FLAGS64} compns_stochy.F90
+   $FC ${FLAGS64} stochy_internal_state_mod.F90
+   $FC ${FLAGS64} getcon_lag_stochy.f
+   $FC ${FLAGS64} getcon_spectral.F90
+   $FC ${FLAGS64} initialize_spectral_mod.F90
+   $FC ${FLAGS64} standalone_stochy_module.F90
+   $FC ${FLAGS64} stochy_patterngenerator.F90
+   $FC ${FLAGS64} stochy_data_mod.F90
+   $FC ${FLAGS64} get_stochy_pattern.F90
+   $FC ${FLAGS64} stochastic_physics.F90
    ar rv libstochastic_physics.a *.o
 fi
-$FC -traceback -real-size 64 -DSTOCHY_UNIT_TEST -qopenmp -o standalone_stochy standalone_stochy.F90 -L. -lstochastic_physics -L/scratch2/NCEPDEV/nwprod/NCEPLIBS/compilers/intel/18.0.5.274/lib -lsp_v2.0.3_d -L/scratch1/NCEPDEV/nems/emc.nemspara/soft/esmf/8.0.0bs48-intel18.0.5.274-impi2018.0.4-netcdf4.6.1/lib -Wl,-rpath,/scratch1/NCEPDEV/nems/emc.nemspara/soft/esmf/8.0.0bs48-intel18.0.5.274-impi2018.0.4-netcdf4.6.1/lib -lesmf -L/apps/netcdf/4.7.0/intel/18.0.5.274/lib -lnetcdff -lnetcdf
+$FC -traceback -real-size 64 -qopenmp -o standalone_stochy standalone_stochy.F90 ${INCS} -I/apps/netcdf/4.7.0/intel/18.0.5.274/include -L. -lstochastic_physics -L../FV3/atmos_cubed_sphere -lfv3core -L../FMS/FMS_INSTALL -lfms -L../FV3/gfsphysics -lgfsphys -L/scratch2/NCEPDEV/nwprod/NCEPLIBS/compilers/intel/18.0.5.274/lib -lsp_v2.0.3_d -L/scratch1/NCEPDEV/nems/emc.nemspara/soft/esmf/8.0.0bs48-intel18.0.5.274-impi2018.0.4-netcdf4.6.1/lib -Wl,-rpath,/scratch1/NCEPDEV/nems/emc.nemspara/soft/esmf/8.0.0bs48-intel18.0.5.274-impi2018.0.4-netcdf4.6.1/lib -lesmf -L/apps/netcdf/4.7.0/intel/18.0.5.274/lib -lnetcdff -lnetcdf
