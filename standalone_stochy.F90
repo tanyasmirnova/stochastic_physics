@@ -2,17 +2,54 @@ program  standalone_stochy
 
 use standalone_stochy_module
 use stochastic_physics, only : init_stochastic_physics,run_stochastic_physics
-use stochy_namelist_def, only : do_sppt,do_shum,do_skeb,do_sfcperts
+
+use fv_mp_mod,       only: mp_start, domain_decomp
+use atmosphere_stub_mod, only: Atm,atmosphere_init_stub
+use fv_arrays_mod,       only: fv_atmos_type
+use fv_control_stub_mod,      only: setup_pointers
+!use mpp_domains
+use mpp_mod,             only: mpp_set_current_pelist,mpp_get_current_pelist,mpp_init,mpp_pe,mpp_npes ,mpp_declare_pelist
+use mpp_domains_mod,     only: mpp_broadcast_domain,MPP_DOMAIN_TIME,mpp_domains_init ,mpp_domains_set_stack_size
+use fms_mod,             only:  fms_init
+use xgrid_mod,           only: grid_box_type
+use netcdf
+
 implicit none
 type(GFS_control_type)  :: Model
 type(GFS_init_type)     :: Init_parm
 integer, parameter      :: nlevs=64
-integer                 :: ntasks
+integer                 :: ntasks,fid
 integer                 :: nthreads,omp_get_num_threads
+integer                 :: ncid,xt_dim_id,yt_dim_id,time_dim_id,xt_var_id,yt_var_id,time_var_id
+integer                 :: varid1,varid2,varid3,varid4
+integer                 :: zt_dim_id,zt_var_id
+integer :: oldMode
+character*1             :: strid
 type(GFS_grid_type),allocatable     :: Grid(:)
 type(GFS_coupling_type),allocatable :: Coupling(:)
+! stochastic namelist fields
+integer nssppt,nsshum,nsskeb,lon_s,lat_s,ntrunc
+integer skeb_varspect_opt,skeb_npass
+logical sppt_sfclimit
+integer, allocatable :: times(:)
+
+real(kind=kind_dbl_prec) :: skeb_sigtop1,skeb_sigtop2,          &
+                   sppt_sigtop1,sppt_sigtop2,shum_sigefold, &
+                   skeb_vdof
+real(kind=kind_dbl_prec) fhstoch,skeb_diss_smooth,spptint,shumint,skebint,skebnorm
+real(kind=kind_dbl_prec), dimension(5) :: skeb,skeb_lscale,skeb_tau
+real(kind=kind_dbl_prec), dimension(5) :: sppt,sppt_lscale,sppt_tau
+real(kind=kind_dbl_prec), dimension(5) :: shum,shum_lscale,shum_tau
+integer,dimension(5) ::skeb_vfilt
+integer(8),dimension(5) ::iseed_sppt,iseed_shum,iseed_skeb
+logical stochini,sppt_logit,new_lscale
+logical use_zmtnblck
+logical sppt_land
 include 'mpif.h'
+include 'netcdf.inc'
 real :: ak(nlevs+1),bk(nlevs+1)
+real(kind=4) :: ts,undef
+
 data ak(:) /0.000, 0.000, 0.575, 5.741, 21.516, 55.712, 116.899, 214.015, 356.223, 552.720, 812.489, &
    1143.988, 1554.789, 2051.150, 2637.553, 3316.217, 4086.614, 4945.029, 5884.206, 6893.117,    &
    7956.908, 9057.051, 10171.712, 11276.348, 12344.490, 13348.671, 14261.435, 15056.342,        &
@@ -29,33 +66,101 @@ data bk(:) /1.00000000, 0.99467117, 0.98862660, 0.98174226, 0.97386760, 0.964827
   0.00000000, 0.00000000, 0.00000000, 0.00000000, 0.00000000, 0.00000000, 0.00000000, 0.00000000, &
   0.00000000, 0.00000000, 0.00000000, 0.00000000, 0.00000000, 0.00000000, 0.00000000, 0.00000000, &
   0.00000000 /
-integer                  :: cres,blksz,nblks,ierr,my_id,i
+integer     :: cres,blksz,nblks,ierr,my_id,i,j,k,nx2,ny2,nx,ny,id,nt
+integer,target :: npx,npy
+integer     :: ng,layout(2),io_layout(2),commID,grid_type,ntiles
+integer :: halo_update_type = 1
+real        :: dx,dy,pi,rd,cp
+logical,target :: nested
+logical   :: write_this_tile
+integer  :: nargs,ntile_out,nlunit,pe,npes,stackmax=4000000
+character*80 :: fname
+character*1  :: ntile_out_str
 
+real(kind=4),allocatable,dimension(:,:) :: workg
+real(kind=4),allocatable,dimension(:,:,:) :: workg3d
+real(kind=4),allocatable,dimension(:) :: grid_xt,grid_yt
+real(kind=8),pointer    ,dimension(:,:) :: area
+real(kind=8)                    :: ex3d(nlevs+1),pressi(nlevs+1),pressl(nlevs),p1000,exn
+
+type(grid_box_type)           :: grid_box
+
+      namelist /nam_stochy/ntrunc,lon_s,lat_s,sppt,sppt_tau,sppt_lscale,sppt_logit, &
+      iseed_shum,iseed_sppt,shum,shum_tau,&
+      shum_lscale,fhstoch,stochini,skeb_varspect_opt,sppt_sfclimit, &
+      skeb,skeb_tau,skeb_vdof,skeb_lscale,iseed_skeb,skeb_vfilt,skeb_diss_smooth, &
+      skeb_sigtop1,skeb_sigtop2,skebnorm,sppt_sigtop1,sppt_sigtop2,&
+      shum_sigefold,spptint,shumint,skebint,skeb_npass,use_zmtnblck,new_lscale
+nt=200
+allocate(times(nt))
+do i=1,nt
+  times(i)=i
+enddo
+write_this_tile=.false.
+ntile_out_str='0'
+nargs=iargc()
+if (nargs.EQ.1) then
+   call getarg(1,ntile_out_str)
+endif
+read(ntile_out_str,'(I1.1)') ntile_out
+open (unit=nlunit, file='input.nml', READONLY, status='OLD')
+read(nlunit,nam_stochy)
+close(nlunit)
+Model%do_sppt=.false.
+Model%do_shum=.false.
+Model%do_skeb=.false.
+if (sppt(1).GT.0) Model%do_sppt=.true.
+if (shum(1).GT.0) Model%do_shum=.true.
+if (skeb(1).GT.0) Model%do_skeb=.true.
 ! define stuff
-print*,'1'
-call MPI_INIT(ierr)
-print*,'2',ierr
-call MPI_COMM_RANK (MPI_COMM_WORLD, my_id, ierr)
-print*,'3',ierr
-call MPI_COMM_SIZE(MPI_COMM_WORLD, ntasks, ierr)
-print*,'4',ierr
-!cres=24
-!blksz=32
-!nblks=cres*cres*6/ntasks
-nblks=1
-blksz=4 
-!nblks=cres*cres*6/ntasks
+ng=3
+pi=3.14159265359
+undef=9.99e+20
+p1000=100000.0
+!define mid-layer pressure
+rd=287.0
+cp=1004.0
+DO k=1,nlevs
+   pressi(k)=ak(k)+p1000*bk(k)
+ENDDO
+ex3d=cp*(pressi/p1000)**(rd/cp)
+DO k=1,nlevs
+   exn = (ex3d(k)*pressi(k)-ex3d(k+1)*pressi(k+1))/((cp+rd)*(pressi(k)-pressi(k+1)))
+   pressl(k)=p1000*exn**(cp/rd)
+ENDDO
+
+call fms_init()
+call mpp_init()
+call fms_init
+my_id=mpp_pe()
+ntasks=mpp_npes()
+
+call atmosphere_init_stub (grid_box, area)
+isd=Atm(1)%bd%isd
+ied=Atm(1)%bd%ied
+jsd=Atm(1)%bd%jsd
+jed=Atm(1)%bd%jed
+isc=Atm(1)%bd%isc
+iec=Atm(1)%bd%iec
+jsc=Atm(1)%bd%jsc
+jec=Atm(1)%bd%jec
+nx=Atm(1)%npx-1
+ny=Atm(1)%npy-1
+allocate(workg(nx,ny))
+allocate(workg3d(nx,ny,nlevs))
+nblks=ny
+blksz=nx
+Allocate(Model%blksz(nblks))
+Model%blksz(:)=blksz
 nthreads = omp_get_num_threads()
-print*,'nthreads=',nthreads
-! setup GFS_control parameters
 Model%me=my_id
 Model%phour=0
 Model%kdt=1
 Model%dtp=900
 Model%fn_nml='input.nml'
 Model%levs=nlevs
-allocate(Model%blksz(nblks))
-Model%blksz(:)=blksz
+allocate(Init_parm%blksz(nblks))
+Init_parm%blksz(:)=blksz
 ! setup GFS_init parameters
 allocate(Init_parm%ak(nlevs+1))
 allocate(Init_parm%bk(nlevs+1))
@@ -63,43 +168,220 @@ Init_parm%ak=ak
 Init_parm%bk=bk
 Init_parm%nlunit=21
 
-!setup GFS_grid parameters
+!define model grid
+Model%nx=nx
+Model%ny=ny
+dx=360.0/Model%nx
+dy=180.0/Model%ny
+allocate(Init_parm%xlon(Model%nx,Model%ny))
+allocate(Init_parm%xlat(Model%nx,Model%ny))
+Init_parm%xlon(:,:)=Atm(1)%gridstruct%agrid(:,:,1)
+Init_parm%xlat(:,:)=Atm(1)%gridstruct%agrid(:,:,2)
+
 allocate(Grid(nblks))
 do i=1,nblks
-   allocate(Grid(i)%xlon(blksz))
    allocate(Grid(i)%xlat(blksz))
+   allocate(Grid(i)%xlon(blksz))
 enddo
-!define model grid
-Grid(1)%xlon(1)=0.0
-Grid(1)%xlon(2)=90.0
-Grid(1)%xlon(3)=180.0
-Grid(1)%xlon(4)=270.0
-Grid(1)%xlat(1)=-40.0
-Grid(1)%xlat(2)=0.0
-Grid(1)%xlat(3)=40.0
-Grid(1)%xlat(4)=80.0
-
-Grid(1)%xlon=Grid(1)%xlon*3.1415928/180.0
-Grid(1)%xlat=Grid(1)%xlat*3.1415928/180.0
-
+do j=1,nblks
+     Grid(j)%xlat(:)=Init_parm%xlat(:,j)
+     Grid(j)%xlon(:)=Init_parm%xlon(:,j)
+enddo
+allocate(grid_xt(nx),grid_yt(ny))
+do i=1,nx
+  grid_xt(i)=i
+enddo
+do i=1,ny
+  grid_yt(i)=i
+enddo
 !setup GFS_coupling
 allocate(Coupling(nblks))
-print*,'calling init'
-print*,'my_id=',my_id
-if (my_id.EQ.0) open(30,file='workg.out',form='unformatted')
 call init_stochastic_physics(Model, Init_parm, ntasks, nthreads)
+call get_outfile(fname)
+write(strid,'(I1.1)') my_id+1
+if (ntile_out.EQ.0) write_this_tile=.true.
+if ((my_id+1).EQ.ntile_out) write_this_tile=.true.
+print*,trim(fname)//'.tile'//strid//'.nc',write_this_tile
+if (write_this_tile) then
+fid=30+my_id
+ierr=nf90_create(trim(fname)//'.tile'//strid//'.nc',cmode=IOR(NF90_CLOBBER,NF_64BIT_OFFSET),ncid=ncid)
+if (ierr.NE.0) print*,my_id,'64bit_offset file opened',ierr
+ierr = nf90_set_fill(ncid, NF90_NOFILL, oldMode)
+if (ierr.NE.0) print*,my_id,'set fill ',ierr
+ierr=NF90_DEF_DIM(ncid,"grid_xt",nx,xt_dim_id)
+if (ierr.NE.0) print*,my_id,'define grid_xt dim ',ierr
+ierr=NF90_DEF_DIM(ncid,"grid_yt",ny,yt_dim_id)
+if (ierr.NE.0) print*,my_id,'define grid yt dim',ierr
+if (Model%do_skeb)ierr=NF90_DEF_DIM(ncid,"p_ref",nlevs,zt_dim_id)
+if (model%do_skeb .AND. ierr.NE.0) print*,my_id,'define pref dim',ierr
+ierr=NF90_DEF_DIM(ncid,"time",NF90_UNLIMITED,time_dim_id)
+!ierr=NF90_DEF_DIM(ncid,"time",nt,time_dim_id)
+print*,my_id,'define dims',nx,ny,nt,nlevs
+if (ierr.NE.0) print*,my_id,'define time dim ',ierr
+  !> - Define the dimension variables.
+ierr=NF90_DEF_VAR(ncid,"grid_xt",NF90_FLOAT,(/ xt_dim_id /), xt_var_id)
+if (ierr.NE.0) print*,my_id,'define lon var ',ierr
+ierr=NF90_PUT_ATT(ncid,xt_var_id,"long_name","T-cell longitude")
+if (ierr.NE.0) print*,my_id,'put att ',ierr
+ierr=NF90_PUT_ATT(ncid,xt_var_id,"cartesian_axis","X")
+if (ierr.NE.0) print*,my_id,'put att ',ierr
+ierr=NF90_PUT_ATT(ncid,xt_var_id,"units","degrees_E")
+if (ierr.NE.0) print*,my_id,'put att ',ierr
+ierr=NF90_DEF_VAR(ncid,"grid_yt",NF90_FLOAT,(/ yt_dim_id /), yt_var_id)
+if (ierr.NE.0) print*,my_id,'define lat var ',ierr
+ierr=NF90_PUT_ATT(ncid,yt_var_id,"long_name","T-cell latitude")
+if (ierr.NE.0) print*,my_id,'put att ',ierr
+ierr=NF90_PUT_ATT(ncid,yt_var_id,"cartesian_axis","Y")
+if (ierr.NE.0) print*,my_id,'put att ',ierr
+ierr=NF90_PUT_ATT(ncid,yt_var_id,"units","degrees_N")
+if (ierr.NE.0) print*,my_id,'put att ',ierr
+if (Model%do_skeb)then
+   ierr=NF90_DEF_VAR(ncid,"p_ref",NF90_FLOAT,(/ zt_dim_id /), zt_var_id)
+   if (ierr.NE.0) print*,my_id,'define pref var ',ierr
+   ierr=NF90_PUT_ATT(ncid,zt_var_id,"long_name","reference pressure")
+   if (ierr.NE.0) print*,my_id,'put att ',ierr
+   ierr=NF90_PUT_ATT(ncid,zt_var_id,"cartesian_axis","Z")
+   if (ierr.NE.0) print*,my_id,'put att ',ierr
+   ierr=NF90_PUT_ATT(ncid,zt_var_id,"units","Pa")
+   if (ierr.NE.0) print*,my_id,'put att ',ierr
+endif
+ierr=NF90_DEF_VAR(ncid,"time",NF90_FLOAT,(/ time_dim_id /), time_var_id)
+if (ierr.NE.0) print*,my_id,'define time var ',ierr
+ierr=NF90_PUT_ATT(ncid,time_var_id,"long_name","time")
+if (ierr.NE.0) print*,my_id,'put att ',ierr
+ierr=NF90_PUT_ATT(ncid,time_var_id,"units","hours since 2014-08-01 00:00:00")
+if (ierr.NE.0) print*,my_id,'put att ',ierr
+ierr=NF90_PUT_ATT(ncid,time_var_id,"cartesian_axis","T")
+if (ierr.NE.0) print*,my_id,'put att ',ierr
+ierr=NF90_PUT_ATT(ncid,time_var_id,"calendar_type","JULIAN")
+if (ierr.NE.0) print*,my_id,'put att ',ierr
+ierr=NF90_PUT_ATT(ncid,time_var_id,"calendar","JULIAN")
+if (ierr.NE.0) print*,my_id,'put att ',ierr
+if (Model%do_sppt)then
+   ierr=NF90_DEF_VAR(ncid,"sppt_wts",NF90_FLOAT,(/xt_dim_id, yt_dim_id ,time_dim_id/), varid1)
+if (ierr.NE.0) print*,my_id,'define sppt_wts ',ierr
+   ierr=NF90_PUT_ATT(ncid,varid1,"long_name","sppt pattern")
+if (ierr.NE.0) print*,my_id,'put att ',ierr
+   ierr=NF90_PUT_ATT(ncid,varid1,"units","None")
+if (ierr.NE.0) print*,my_id,'put att ',ierr
+   ierr=NF90_PUT_ATT(ncid,varid1,"missing_value",undef)
+if (ierr.NE.0) print*,my_id,'put att ',ierr
+   ierr=NF90_PUT_ATT(ncid,varid1,"_FillValue",undef)
+if (ierr.NE.0) print*,my_id,'put att ',ierr
+   ierr=NF90_PUT_ATT(ncid,varid1,"cell_methods","time: point")
+if (ierr.NE.0) print*,my_id,'put att ',ierr
+endif
+if (Model%do_shum)then
+   ierr=NF90_DEF_VAR(ncid,"shum_wts",NF90_FLOAT,(/xt_dim_id, yt_dim_id ,time_dim_id/), varid2)
+if (ierr.NE.0) print*,my_id,'define shum_wts ',ierr
+   ierr=NF90_PUT_ATT(ncid,varid2,"long_name","shum pattern")
+if (ierr.NE.0) print*,my_id,'put att ',ierr
+   ierr=NF90_PUT_ATT(ncid,varid2,"units","None")
+if (ierr.NE.0) print*,my_id,'put att ',ierr
+   ierr=NF90_PUT_ATT(ncid,varid2,"missing_value",undef)
+if (ierr.NE.0) print*,my_id,'put att ',ierr
+   ierr=NF90_PUT_ATT(ncid,varid2,"_FillValue",undef)
+if (ierr.NE.0) print*,my_id,'put att ',ierr
+   ierr=NF90_PUT_ATT(ncid,varid2,"cell_methods","time: point")
+if (ierr.NE.0) print*,my_id,'put att ',ierr
+endif
+if (Model%do_skeb)then
+   ierr=NF90_DEF_VAR(ncid,"skebu_wts",NF90_FLOAT,(/xt_dim_id, yt_dim_id ,zt_dim_id,time_dim_id/), varid3)
+if (ierr.NE.0) print*,my_id,'define skebu wts ',ierr
+   ierr=NF90_DEF_VAR(ncid,"skebv_wts",NF90_FLOAT,(/xt_dim_id, yt_dim_id ,zt_dim_id,time_dim_id/), varid4)
+if (ierr.NE.0) print*,my_id,'define skebv wts ',ierr
+   ierr=NF90_PUT_ATT(ncid,varid3,"long_name","skeb u pattern")
+if (ierr.NE.0) print*,my_id,'put att ',ierr
+   ierr=NF90_PUT_ATT(ncid,varid3,"units","None")
+if (ierr.NE.0) print*,my_id,'put att ',ierr
+   ierr=NF90_PUT_ATT(ncid,varid3,"missing_value",undef)
+if (ierr.NE.0) print*,my_id,'put att ',ierr
+   ierr=NF90_PUT_ATT(ncid,varid3,"_FillValue",undef)
+if (ierr.NE.0) print*,my_id,'put att ',ierr
+   ierr=NF90_PUT_ATT(ncid,varid3,"cell_methods","time: point")
+if (ierr.NE.0) print*,my_id,'put att ',ierr
+   ierr=NF90_PUT_ATT(ncid,varid4,"long_name","skeb v pattern")
+if (ierr.NE.0) print*,my_id,'put att ',ierr
+   ierr=NF90_PUT_ATT(ncid,varid4,"units","None")
+if (ierr.NE.0) print*,my_id,'put att ',ierr
+   ierr=NF90_PUT_ATT(ncid,varid4,"missing_value",undef)
+if (ierr.NE.0) print*,my_id,'put att ',ierr
+   ierr=NF90_PUT_ATT(ncid,varid4,"_FillValue",undef)
+if (ierr.NE.0) print*,my_id,'put att ',ierr
+   ierr=NF90_PUT_ATT(ncid,varid4,"cell_methods","time: point")
+if (ierr.NE.0) print*,my_id,'put att ',ierr
+endif
+
+ierr=NF90_ENDDEF(ncid)
+if (ierr.NE.0) print*,my_id,'enddef ',ierr
+ierr=NF90_PUT_VAR(ncid,xt_var_id,grid_xt)
+if (ierr.NE.0) print*,my_id,'put lon ',ierr
+ierr=NF90_PUT_VAR(ncid,yt_var_id,grid_yt)
+if (ierr.NE.0) print*,my_id,'put lat ',ierr
+ierr=NF90_PUT_VAR(ncid,time_var_id,ts,times)
+print*,'times'
+if (ierr.NE.0) print*,my_id,'put time ',ierr
+if (Model%do_skeb)then
+   ierr=NF90_PUT_VAR(ncid,zt_var_id,pressl)
+   if (ierr.NE.0) print*,my_id,'put zvar',ierr
+endif
+endif
+
 do i=1,nblks
-   if (do_sppt) allocate(Coupling(i)%sppt_wts(blksz,nlevs))
-   if (do_shum) allocate(Coupling(i)%shum_wts(blksz,nlevs))
-   if (do_skeb) allocate(Coupling(i)%skebu_wts(blksz,nlevs))
-   if (do_skeb) allocate(Coupling(i)%skebv_wts(blksz,nlevs))
+   if (Model%do_sppt)allocate(Coupling(i)%sppt_wts(blksz,nlevs))
+   if (Model%do_shum)allocate(Coupling(i)%shum_wts(blksz,nlevs))
+   if (Model%do_skeb)allocate(Coupling(i)%skebu_wts(blksz,nlevs))
+   if (Model%do_skeb)allocate(Coupling(i)%skebv_wts(blksz,nlevs))
 enddo
-do i=1,1000
+do i=1,nt  
+   Model%kdt=i
+   ts=i/4.0
    call run_stochastic_physics(Model, Grid, Coupling, nthreads)
-   if (my_id.EQ.0) write(6,fmt='(a,4f6.3)') 'sppt_wts=',Coupling(1)%sppt_wts(:,40)
-   if (my_id.EQ.0) print*,'time-step=',i
-   Model%kdt=Model%kdt+1
+   if (write_this_tile) then
+   if (Model%do_sppt)then
+      do j=1,ny
+         workg(:,j)=Coupling(j)%sppt_wts(:,20)   
+      enddo
+      ierr=NF90_PUT_VAR(ncid,varid1,workg,(/1,1,i/))
+      if (ierr.NE.0) print*,my_id,'put sppt ',ierr
+   endif
+   if (Model%do_shum)then
+      do j=1,ny
+         workg(:,j)=Coupling(j)%shum_wts(:,1)
+      enddo
+      ierr=NF90_PUT_VAR(ncid,varid2,workg,(/1,1,i/))
+      if (ierr.NE.0) print*,my_id,'put shum ',ierr
+   endif
+   if (Model%do_skeb)then
+      do k=1,nlevs
+         do j=1,ny
+            workg3d(:,j,k)=Coupling(j)%skebu_wts(:,k)
+         enddo
+         ierr=NF90_PUT_VAR(ncid,varid4,workg3d(:,:,k),(/1,1,k,i/))
+         if (ierr.NE.0) print*,my_id,'put skebu ',ierr
+      enddo
+      !ierr=NF90_PUT_VAR(ncid,varid3,workg3d,(/1,1,1,i/))
+      do k=1,nlevs
+         do j=1,ny
+            workg3d(:,j,k)=Coupling(j)%skebv_wts(:,k)
+         enddo
+         ierr=NF90_PUT_VAR(ncid,varid4,workg3d(:,:,k),(/1,1,k,i/))
+         if (ierr.NE.0) print*,my_id,'put skebv ',ierr
+      enddo
+      !ierr=NF90_PUT_VAR(ncid,varid4,workg3d,(/1,1,1,i/))
+   endif
+   !print*,'put skebv',ierr
+   endif
 enddo
-call mpi_barrier(mpi_comm_world,ierr)
-if(my_id.EQ.0)close(30)
+if (write_this_tile) ierr=NF90_CLOSE(ncid)
+end
+subroutine get_outfile(fname)
+use stochy_namelist_def
+character*80,intent(out) :: fname
+character*4   :: s_ntrunc,s_lat,s_lon
+   write(s_ntrunc,'(I4)') ntrunc
+   write(s_lat,'(I4)') lat_s 
+   write(s_lon,'(I4)') lon_s  
+   fname=trim('workg_T'//trim(adjustl(s_ntrunc))//'_'//trim(adjustl(s_lon))//'x'//trim(adjustl(s_lat)))
+   return
 end

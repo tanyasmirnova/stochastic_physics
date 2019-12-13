@@ -1,13 +1,20 @@
+!>@brief The module 'stochastic_physics' is for initialization and running of
+!! the stochastic physics random pattern generators
 module stochastic_physics
 
 implicit none
 
 private
 
-public :: init_stochastic_physics, run_stochastic_physics
+public :: init_stochastic_physics
+public :: run_stochastic_physics
 
 contains
 
+!>@brief The subroutine 'init_stochastic_physics' initializes the stochastic
+!!pattern genertors
+!>@details It reads the stochastic physics namelist (nam_stoch and nam_sfcperts)
+!allocates and polulates the necessary arrays
 subroutine init_stochastic_physics(Model, Init_parm, ntasks, nthreads)
 use stochy_internal_state_mod
 use stochy_data_mod, only : nshum,rpattern_shum,init_stochdata,rpattern_sppt,nsppt,rpattern_skeb,nskeb,gg_lats,gg_lons,&
@@ -92,7 +99,7 @@ allocate(sl(Model%levs))
 do k=1,Model%levs
    sl(k)= 0.5*(Init_parm%ak(k)/101300.+Init_parm%bk(k)+Init_parm%ak(k+1)/101300.0+Init_parm%bk(k+1)) ! si are now sigmas
 enddo
-if (do_sppt) then
+if (Model%do_sppt) then
    allocate(vfact_sppt(Model%levs))
    do k=1,Model%levs
       if (sl(k) .lt. sppt_sigtop1 .and. sl(k) .gt. sppt_sigtop2) then
@@ -113,7 +120,7 @@ if (do_sppt) then
       enddo
    endif
 endif
-if (do_skeb) then
+if (Model%do_skeb) then
    !print*,'allocating skeb stuff',skeblevs
    allocate(vfact_skeb(Model%levs))
    allocate(skeb_vloc(skeblevs)) ! local
@@ -158,7 +165,7 @@ skeb_vwts(:,1)=1.0-skeb_vwts(:,2)
 skeb_vpts(:,2)=skeb_vpts(:,1)+1.0
 endif
 
-if (do_shum) then
+if (Model%do_shum) then
    allocate(vfact_shum(Model%levs))
    do k=1,Model%levs
       vfact_shum(k) = exp((sl(k)-1.)/shum_sigefold)
@@ -192,7 +199,8 @@ RNLAT=gg_lats(1)*2-gg_lats(2)
 !print *,'done with init_stochastic_physics'
 
 end subroutine init_stochastic_physics
-
+!>@brief The subroutine 'run_stochastic_physics' updates the random patterns if
+!!necessary 
 subroutine run_stochastic_physics(Model, Grid, Coupling, nthreads)
 use fv_mp_mod, only : is_master
 use stochy_internal_state_mod
@@ -202,6 +210,7 @@ use get_stochy_pattern_mod,only : get_random_pattern_fv3,get_random_pattern_fv3_
 use stochy_resol_def , only : latg,lonf
 use stochy_namelist_def
 use spectral_layout_mod,only:me,ompthreads
+use mpp_mod
 #ifdef STOCHY_UNIT_TEST
 use standalone_stochy_module,   only: GFS_control_type, GFS_grid_type, GFS_Coupling_type
 #else
@@ -221,7 +230,7 @@ integer :: nblks, blk, len, maxlen
 character*120 :: sfile
 character*6   :: STRFH
 
-if ( (.NOT. do_sppt) .AND. (.NOT. do_shum) .AND. (.NOT. do_skeb)  .AND. (.NOT. do_sfcperts) ) return
+if ( (.NOT. Model%do_sppt) .AND. (.NOT. Model%do_shum) .AND. (.NOT. Model%do_skeb) ) return
 
 ! Update number of threads in shared variables in spectral_layout_mod and set block-related variables
 ompthreads = nthreads
@@ -229,7 +238,7 @@ nblks = size(Model%blksz)
 maxlen = maxval(Model%blksz(:))
 
 ! check to see if it is time to write out random patterns
-if (Model%phour .EQ. fhstoch) then
+if (fhstoch.GE. 0 .AND. MOD(Model%phour,fhstoch) .EQ. 0) then
    write(STRFH,FMT='(I6.6)') nint(Model%phour)
    sfile='stoch_out.F'//trim(STRFH)
    call dump_patterns(sfile)
@@ -237,8 +246,7 @@ endif
 allocate(tmp_wts(nblks,maxlen))
 allocate(tmpu_wts(nblks,maxlen,Model%levs))
 allocate(tmpv_wts(nblks,maxlen,Model%levs))
-if (do_sppt) then
-   print*,'update patthern?',Model%kdt,nssppt
+if (Model%do_sppt) then
    if (mod(Model%kdt,nssppt) == 1 .or. nssppt == 1) then
       call get_random_pattern_fv3(rpattern_sppt,nsppt,gis_stochy,Model,Grid,nblks,maxlen,tmp_wts)
       DO blk=1,nblks
@@ -251,7 +259,7 @@ if (do_sppt) then
       ENDDO
    endif
 endif
-if (do_shum) then
+if (Model%do_shum) then
    if (mod(Model%kdt,nsshum) == 1 .or. nsshum == 1) then
       call get_random_pattern_fv3(rpattern_shum,nshum,gis_stochy,Model,Grid,nblks,maxlen,tmp_wts)
       DO blk=1,nblks
@@ -262,7 +270,7 @@ if (do_shum) then
       ENDDO
    endif
 endif
-if (do_skeb) then
+if (Model%do_skeb) then
    if (mod(Model%kdt,nsskeb) == 1 .or. nsskeb == 1) then
       call get_random_pattern_fv3_vect(rpattern_skeb,nskeb,gis_stochy,Model,Grid,nblks,maxlen,tmpu_wts,tmpv_wts)
       DO blk=1,nblks
@@ -317,7 +325,7 @@ integer j,ierr,i
 integer :: nblks, blk, len, maxlen
 character*120 :: sfile
 character*6   :: STRFH
-if (.NOT. do_sfcperts) return
+if (.NOT. Model%do_sfcperts) return
 
 ! Set block-related variables
 nblks = size(Model%blksz)
@@ -325,7 +333,7 @@ maxlen = maxval(Model%blksz(:))
 
 allocate(tmpsfc_wts(nblks,maxlen,Model%nsfcpert))  ! mg, sfc-perts
 if (is_master()) then
-  print*,'In init_stochastic_physics: do_sfcperts ',do_sfcperts
+  print*,'In run_stochastic_physics_sfc'
 endif
 call get_random_pattern_sfc_fv3(rpattern_sfc,npsfc,gis_stochy,Model,Grid,nblks,maxlen,tmpsfc_wts)
 DO blk=1,nblks

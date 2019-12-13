@@ -7,7 +7,7 @@
       implicit none
 
       public
-      integer nsshum,nssppt,nsskeb,lon_s,lat_s,ntrunc
+      integer nssppt,nsshum,nsskeb,lon_s,lat_s,ntrunc
 
 ! pjp stochastic phyics
       integer skeb_varspect_opt,skeb_npass
@@ -22,8 +22,9 @@
       real(kind=kind_dbl_prec), dimension(5) :: shum,shum_lscale,shum_tau
       integer,dimension(5) ::skeb_vfilt
       integer(8),dimension(5) ::iseed_sppt,iseed_shum,iseed_skeb
-      logical stochini,sppt_logit
-      logical do_shum,do_sppt,do_skeb,use_zmtnblck,new_lscale
+      logical stochini,sppt_logit,new_lscale
+      logical use_zmtnblck
+      logical do_shum,do_sppt,do_skeb
 
 ! mg surface perturbations
       real(kind=kind_dbl_prec), dimension(5) :: sfc_lscale,sfc_tau

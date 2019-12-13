@@ -1,11 +1,16 @@
 #!/bin/sh -x
+compile_all=1
 FC=mpif90
-compile_all=0
 INCS="-I. -I../FV3/gfsphysics/ -I../FMS/include -I../FV3/atmos_cubed_sphere -I../FMS/fv3gfs"
-FLAGS64=" -traceback -real-size 64 -DSTOCHY_UNIT_TEST -c "$INCS
-FLAGS=" -traceback -DSTOCHY_UNIT_TEST -c "$INCS
+OPT_FLAGS="-traceback"
+#OPT_FLAGS='-O2 -debug minimal -fp-model source -qoverride-limits -qopt-prefetch=3'
+FLAGS64=$OPT_FLAGS" -real-size 64 -DSTOCHY_UNIT_TEST -c "$INCS
+FLAGS=$OPT_FLAGS" -DSTOCHY_UNIT_TEST -c "$INCS
+echo $FLAGS
 if [ $compile_all -eq 1 ];then
    rm -f *.i90 *.i *.o *.mod lib*a
+   $FC ${FLAGS}   fv_control_stub.F90
+   $FC ${FLAGS}   atmosphere_stub.F90
    $FC ${FLAGS64} stochy_namelist_def.F90
    $FC ${FLAGS64} stochy_resol_def.f
    $FC ${FLAGS64} stochy_gg_def.f
