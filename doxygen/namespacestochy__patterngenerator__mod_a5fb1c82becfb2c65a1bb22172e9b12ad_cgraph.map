@@ -1,0 +1,4 @@
+<map id="stochy_patterngenerator_mod::patterngenerator_init" name="stochy_patterngenerator_mod::patterngenerator_init">
+<area shape="rect" id="node2" href="$namespacestochy__patterngenerator__mod.html#a5421e9d3329958b5dcd4bd7020503a43" title="The subroutine &#39;setvarspect&#39; calculates the variance spectrum. " alt="" coords="256,5,437,47"/>
+<area shape="rect" id="node3" href="$namespacestochy__patterngenerator__mod.html#ac21249f3339c20ce049df2893440fa17" title="The subroutine &#39;computevarspec&#39; compute the globally integrated variance from complex spectral coeffi..." alt="" coords="485,5,667,47"/>
+</map>
