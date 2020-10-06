@@ -52,22 +52,44 @@ module lndp_apply_perts_mod
         logical         :: print_flag 
 
         real(kind=kind_dbl_prec) :: p, min_bound, max_bound, tmp_sic,  pert
-
-        ! decrease in applied pert with depth
-        real(kind=kind_dbl_prec), dimension(4), parameter  :: smc_vertscale = (/1.0,0.5,0.25,0.125/)
-        real(kind=kind_dbl_prec), dimension(4), parameter  :: stc_vertscale = (/1.0,0.5,0.25,0.125/)
+        real(kind=kind_dbl_prec), dimension(lsoil) :: zslayer, smc_vertscale, stc_vertscale
 
         ! model-dependent values, hard-wired in noah code.
+        ! decrease in applied pert with depth
+        !-- Noah lsm
+        real(kind=kind_dbl_prec), dimension(4), parameter  :: smc_vertscale_noah = (/1.0,0.5,0.25,0.125/)
+        real(kind=kind_dbl_prec), dimension(4), parameter  :: stc_vertscale_noah = (/1.0,0.5,0.25,0.125/)
         real(kind=kind_dbl_prec), dimension(4), parameter  :: zs_noah = (/0.1, 0.3, 0.6, 1.0/)
-        real(kind=kind_dbl_prec), parameter                :: minsmc = 0.02
+        !-- RUC lsm
+        real(kind=kind_dbl_prec), dimension(lsoil), parameter :: zs_ruc = (/ 0.00 , 0.05 , 0.20 , 0.40 , 0.60, 1.00, 1.60 , 2.20, 3.00 /)
+        real(kind=kind_dbl_prec), dimension(lsoil), parameter :: smc_vertscale_ruc = (/1.0,0.9,0.8,0.6,0.4,0.2,0.1,0.05,0./)
+        real(kind=kind_dbl_prec), dimension(lsoil), parameter :: stc_vertscale_ruc = (/1.0,0.9,0.8,0.6,0.4,0.2,0.1,0.05,0./)
+        real(kind=kind_dbl_prec), parameter                   :: minsmc = 0.02
 
         ierr = 0 
 
-        if (lsm .NE. 1 ) then 
-                write(6,*) 'ERROR: lndp_apply_pert assumes LSM is noah, ', & 
+        if (lsm .NE. 1 .or. lsm .ne. 3) then 
+                write(6,*) 'ERROR: lndp_apply_pert assumes LSM is noah or ruc, ', & 
                             ' may need to adapt variable names for a different LSM'
                 ierr=10 
                 return 
+        endif
+
+        zslayer(:) = 0.
+        smc_vertscale(:) = 0.
+        stc_vertscale(:) = 0.
+        if (lsm == 1) then
+          do k = 1, lsoil
+            zslayer(k) = zs_noah(k)
+            smc_vertscale(k) = smc_vertscale_noah(k)
+            stc_vertscale(k) = stc_vertscale_noah(k)
+          enddo
+        elseif (lsm == 3) then
+          do k = 1, lsoil-1
+            zslayer(k) = zs_ruc(k+1) - zs_ruc(k)
+            smc_vertscale(k) = smc_vertscale_ruc(k)
+            stc_vertscale(k) = stc_vertscale_ruc(k)
+          enddo
         endif
 
         nblks = size(blksz)
@@ -107,7 +129,7 @@ module lndp_apply_perts_mod
 
                          ! perturb total soil moisture 
                          ! factor of sldepth*1000 converts from mm to m3/m3
-                         pert = sfc_wts(nb,i,v)*smc_vertscale(k)*lndp_prt_list(v)/(zs_noah(k)*1000.)                    
+                         pert = sfc_wts(nb,i,v)*smc_vertscale(k)*lndp_prt_list(v)/(zslayer(k)*1000.)                    
                          pert = pert*dtf/3600. ! lndp_prt_list input is per hour, convert to per timestep 
                                                      ! (necessary for state vars only)
                          call apply_pert('smc',pert,print_flag, smc(nb,i,k),ierr,p,min_bound, max_bound)
