@@ -158,6 +158,21 @@ module lndp_apply_perts_mod
                          pert = sfc_wts(nb,i,v)*lndp_prt_list(v)
                          call apply_pert ('vfrac',pert,print_flag, vfrac(nb,i), ierr,p,min_bound, max_bound)
                      endif
+                case('alb')  ! albedo
+                     if (param_update_flag) then
+                         p =5.
+                         min_bound=0.
+                         max_bound=1.
+
+                         pert = sfc_wts(nb,i,v)*lndp_prt_list(v)
+                         call apply_pert ('alvsf',pert,print_flag, alvsf(nb,i), ierr,p,min_bound, max_bound)
+                         call apply_pert ('alnsf',pert,print_flag, alnsf(nb,i), ierr,p,min_bound, max_bound)
+                         call apply_pert ('alvwf',pert,print_flag, alvwf(nb,i), ierr,p,min_bound, max_bound)
+                         call apply_pert ('alnwf',pert,print_flag, alnwf(nb,i), ierr,p,min_bound, max_bound)
+                         call apply_pert ('facsf',pert,print_flag, facsf(nb,i), ierr,p,min_bound, max_bound)
+                         call apply_pert ('facwf',pert,print_flag, facwf(nb,i), ierr,p,min_bound, max_bound)
+                     endif
+
                 case default 
                     print*, &
                      'ERROR: unrecognised lndp_prt_list option in lndp_apply_pert, exiting', trim(lndp_var_list(v)) 
