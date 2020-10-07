@@ -19,7 +19,7 @@ module lndp_apply_perts_mod
 
     subroutine lndp_apply_perts(blksz,lsm, lsoil,dtf, n_var_lndp, lndp_var_list, & 
                 lndp_prt_list, sfc_wts, xlon, xlat, stype, maxsmc,param_update_flag,  & 
-                smc, slc, stc, vfrac, ierr) 
+                smc, slc, stc, vfrac, alvsf, alnsf, alvwf, alnwf, facsf, facwf, ierr) 
 
         implicit none
 
@@ -42,6 +42,12 @@ module lndp_apply_perts_mod
         real(kind=kind_dbl_prec),     intent(inout) :: slc(:,:,:)
         real(kind=kind_dbl_prec),     intent(inout) :: stc(:,:,:)
         real(kind=kind_dbl_prec),     intent(inout) :: vfrac(:,:)
+        real(kind=kind_dbl_prec),     intent(inout) :: alvsf(:,:)
+        real(kind=kind_dbl_prec),     intent(inout) :: alnsf(:,:)
+        real(kind=kind_dbl_prec),     intent(inout) :: alvwf(:,:)
+        real(kind=kind_dbl_prec),     intent(inout) :: alnwf(:,:)
+        real(kind=kind_dbl_prec),     intent(inout) :: facsf(:,:)
+        real(kind=kind_dbl_prec),     intent(inout) :: facwf(:,:)
 
         ! intent(out) 
         integer,                        intent(out) :: ierr
