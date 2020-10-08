@@ -17,9 +17,10 @@ module lndp_apply_perts_mod
 ! Draper, July 2020. 
 ! Note on location: requires access to namelist_soilveg
 
-    subroutine lndp_apply_perts(blksz,lsm, lsoil,dtf, n_var_lndp, lndp_var_list, & 
+    subroutine lndp_apply_perts(blksz,lsm, lsoil,dtf, n_var_lndp, lndp_var_list,      & 
                 lndp_prt_list, sfc_wts, xlon, xlat, stype, maxsmc,param_update_flag,  & 
-                smc, slc, stc, vfrac, alvsf, alnsf, alvwf, alnwf, facsf, facwf, ierr) 
+                smc, slc, stc, vfrac, alvsf, alnsf, alvwf, alnwf, facsf, facwf,       &
+                snoalb, semis, ierr) 
 
         implicit none
 
@@ -42,12 +43,14 @@ module lndp_apply_perts_mod
         real(kind=kind_dbl_prec),     intent(inout) :: slc(:,:,:)
         real(kind=kind_dbl_prec),     intent(inout) :: stc(:,:,:)
         real(kind=kind_dbl_prec),     intent(inout) :: vfrac(:,:)
+        real(kind=kind_dbl_prec),     intent(inout) :: snoalb(:,:)
         real(kind=kind_dbl_prec),     intent(inout) :: alvsf(:,:)
         real(kind=kind_dbl_prec),     intent(inout) :: alnsf(:,:)
         real(kind=kind_dbl_prec),     intent(inout) :: alvwf(:,:)
         real(kind=kind_dbl_prec),     intent(inout) :: alnwf(:,:)
         real(kind=kind_dbl_prec),     intent(inout) :: facsf(:,:)
         real(kind=kind_dbl_prec),     intent(inout) :: facwf(:,:)
+        real(kind=kind_dbl_prec),     intent(inout) :: semis(:,:)
 
         ! intent(out) 
         integer,                        intent(out) :: ierr
@@ -135,6 +138,7 @@ module lndp_apply_perts_mod
 
                          ! perturb total soil moisture 
                          ! factor of sldepth*1000 converts from mm to m3/m3
+                         ! lndp_prt_list(v) = 0.3 in input.nml
                          pert = sfc_wts(nb,i,v)*smc_vertscale(k)*lndp_prt_list(v)/(zslayer(k)*1000.)                    
                          pert = pert*dtf/3600. ! lndp_prt_list input is per hour, convert to per timestep 
                                                      ! (necessary for state vars only)
@@ -161,6 +165,7 @@ module lndp_apply_perts_mod
                          min_bound=0.
                          max_bound=1.
 
+                         ! lndp_prt_list(v) = 0.1 in input.nml
                          pert = sfc_wts(nb,i,v)*lndp_prt_list(v)
                          call apply_pert ('vfrac',pert,print_flag, vfrac(nb,i), ierr,p,min_bound, max_bound)
                      endif
@@ -170,14 +175,33 @@ module lndp_apply_perts_mod
                          min_bound=0.
                          max_bound=1.
 
+                         ! lndp_prt_list(v) = 0.4 (wrf)
                          pert = sfc_wts(nb,i,v)*lndp_prt_list(v)
-                         call apply_pert ('alvsf',pert,print_flag, alvsf(nb,i), ierr,p,min_bound, max_bound)
+                         !call apply_pert ('alvsf',pert,print_flag, alvsf(nb,i), ierr,p,min_bound, max_bound)
                          call apply_pert ('alnsf',pert,print_flag, alnsf(nb,i), ierr,p,min_bound, max_bound)
-                         call apply_pert ('alvwf',pert,print_flag, alvwf(nb,i), ierr,p,min_bound, max_bound)
+                         !call apply_pert ('alvwf',pert,print_flag, alvwf(nb,i), ierr,p,min_bound, max_bound)
                          call apply_pert ('alnwf',pert,print_flag, alnwf(nb,i), ierr,p,min_bound, max_bound)
-                         call apply_pert ('facsf',pert,print_flag, facsf(nb,i), ierr,p,min_bound, max_bound)
-                         call apply_pert ('facwf',pert,print_flag, facwf(nb,i), ierr,p,min_bound, max_bound)
+                         !call apply_pert ('facsf',pert,print_flag, facsf(nb,i), ierr,p,min_bound, max_bound)
+                         !call apply_pert ('facwf',pert,print_flag, facwf(nb,i), ierr,p,min_bound, max_bound)
                      endif
+                case('sal')  ! snow albedo
+                     if (param_update_flag) then
+                         p =5.
+                         min_bound=0.
+                         max_bound=1.
+
+                         ! lndp_prt_list(v) = 0.4 (wrf)
+                         pert = sfc_wts(nb,i,v)*lndp_prt_list(v)
+                         call apply_pert ('snoalb',pert,print_flag, snoalb(nb,i), ierr,p,min_bound, max_bound)
+                case('emi')  ! emissivity
+                     if (param_update_flag) then
+                         p =5.
+                         min_bound=0.
+                         max_bound=1.
+
+                         ! lndp_prt_list(v) = 0.1 (wrf)
+                         pert = sfc_wts(nb,i,v)*lndp_prt_list(v)
+                         call apply_pert ('semis',pert,print_flag, semis(nb,i), ierr,p,min_bound, max_bound)
 
                 case default 
                     print*, &
