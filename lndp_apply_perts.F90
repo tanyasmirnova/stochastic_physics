@@ -17,8 +17,10 @@ module lndp_apply_perts_mod
 ! Draper, July 2020. 
 ! Note on location: requires access to namelist_soilveg
 
-    subroutine lndp_apply_perts(blksz,lsm, lsoil,dtf, n_var_lndp, lndp_var_list,      & 
-                lndp_prt_list, sfc_wts, xlon, xlat, stype, maxsmc,param_update_flag,  & 
+    subroutine lndp_apply_perts(blksz,lsm, lsoil, lsm_ruc, lsoil_lsm, dzs_lsm,        &
+                dtf, n_var_lndp, lndp_var_list,                                       & 
+                lndp_prt_list, sfc_wts, xlon, xlat, stype, maxsmc, maxsmc_lsm,        &
+                param_update_flag,                                                    & 
                 smc, slc, stc, vfrac, alvsf, alnsf, alvwf, alnwf, facsf, facwf,       &
                 snoalb, semis, ierr) 
 
@@ -27,6 +29,7 @@ module lndp_apply_perts_mod
         ! intent(in) 
         integer,                  intent(in) :: blksz(:)
         integer,                  intent(in) :: n_var_lndp, lsoil, lsm
+        integer,                  intent(in) :: lsoil_lsm, lsm_ruc
         character(len=3),         intent(in) :: lndp_var_list(:)
         real(kind=kind_dbl_prec),     intent(in) :: lndp_prt_list(:)
         real(kind=kind_dbl_prec),     intent(in) :: dtf
@@ -37,6 +40,8 @@ module lndp_apply_perts_mod
                                         ! true =  parameters have been updated, apply perts
         real(kind=kind_dbl_prec),     intent(in) :: stype(:,:)
         real(kind=kind_dbl_prec),     intent(in) :: maxsmc(:) 
+        real(kind=kind_dbl_prec),     intent(in) :: maxsmc_lsm(:) 
+        real(kind=kind_dbl_prec),     intent(in) :: dzs_lsm(:)
 
         ! intent(inout) 
         real(kind=kind_dbl_prec),     intent(inout) :: smc(:,:,:)
@@ -57,11 +62,11 @@ module lndp_apply_perts_mod
 
         ! local
         integer         :: nblks, print_i, print_nb, i, nb
-        integer         ::  this_im, v, soiltyp, k
+        integer         :: this_im, v, soiltyp, k, nsoil
         logical         :: print_flag 
 
         real(kind=kind_dbl_prec) :: p, min_bound, max_bound, tmp_sic,  pert
-        real(kind=kind_dbl_prec), dimension(lsoil) :: zslayer, smc_vertscale, stc_vertscale
+        real(kind=kind_dbl_prec), dimension(max(lsoil,lsoil_lsm)) :: zslayer, smc_vertscale, stc_vertscale
 
         ! model-dependent values, hard-wired in noah code.
         ! decrease in applied pert with depth
@@ -70,14 +75,13 @@ module lndp_apply_perts_mod
         real(kind=kind_dbl_prec), dimension(4), parameter  :: stc_vertscale_noah = (/1.0,0.5,0.25,0.125/)
         real(kind=kind_dbl_prec), dimension(4), parameter  :: zs_noah = (/0.1, 0.3, 0.6, 1.0/)
         !-- RUC lsm
-        real(kind=kind_dbl_prec), dimension(lsoil), parameter :: zs_ruc = (/ 0.00 , 0.05 , 0.20 , 0.40 , 0.60, 1.00, 1.60 , 2.20, 3.00 /)
-        real(kind=kind_dbl_prec), dimension(lsoil), parameter :: smc_vertscale_ruc = (/1.0,0.9,0.8,0.6,0.4,0.2,0.1,0.05,0./)
-        real(kind=kind_dbl_prec), dimension(lsoil), parameter :: stc_vertscale_ruc = (/1.0,0.9,0.8,0.6,0.4,0.2,0.1,0.05,0./)
+        real(kind=kind_dbl_prec), dimension(9), parameter :: smc_vertscale_ruc = (/1.0,0.9,0.8,0.6,0.4,0.2,0.1,0.05,0./)
+        real(kind=kind_dbl_prec), dimension(9), parameter :: stc_vertscale_ruc = (/1.0,0.9,0.8,0.6,0.4,0.2,0.1,0.05,0./)
         real(kind=kind_dbl_prec), parameter                   :: minsmc = 0.02
 
         ierr = 0 
 
-        if (lsm .NE. 1 .or. lsm .ne. 3) then 
+        if (lsm .NE. 1 .or. lsm .ne. lsm_ruc) then 
                 write(6,*) 'ERROR: lndp_apply_pert assumes LSM is noah or ruc, ', & 
                             ' may need to adapt variable names for a different LSM'
                 ierr=10 
@@ -88,14 +92,16 @@ module lndp_apply_perts_mod
         smc_vertscale(:) = 0.
         stc_vertscale(:) = 0.
         if (lsm == 1) then
+          nsoil = lsoil
           do k = 1, lsoil
             zslayer(k) = zs_noah(k)
             smc_vertscale(k) = smc_vertscale_noah(k)
             stc_vertscale(k) = stc_vertscale_noah(k)
           enddo
-        elseif (lsm == 3) then
-          do k = 1, lsoil-1
-            zslayer(k) = zs_ruc(k+1) - zs_ruc(k)
+        elseif (lsm == lsm_ruc) then
+          nsoil = lsoil_lsm
+          do k = 1, lsoil_lsm
+            zslayer(k) = dzs_lsm(k)
             smc_vertscale(k) = smc_vertscale_ruc(k)
             stc_vertscale(k) = stc_vertscale_ruc(k)
           enddo
@@ -132,7 +138,7 @@ module lndp_apply_perts_mod
                     min_bound = minsmc
                     max_bound = maxsmc(soiltyp)
 
-                    do k=1,lsoil
+                    do k=1,nsoil
                          !store frozen soil moisture
                          tmp_sic= smc(nb,i,k)  - slc(nb,i,k)
 
@@ -150,7 +156,7 @@ module lndp_apply_perts_mod
 
                 case('stc') 
 
-                    do k=1,lsoil
+                    do k=1,nsoil
                          pert = sfc_wts(nb,i,v)*stc_vertscale(k)*lndp_prt_list(v)
                          pert = pert*dtf/3600. ! lndp_prt_list input is per hour, convert to per timestep
                                                      ! (necessary for state vars only)
@@ -193,6 +199,7 @@ module lndp_apply_perts_mod
                          ! lndp_prt_list(v) = 0.4 (wrf)
                          pert = sfc_wts(nb,i,v)*lndp_prt_list(v)
                          call apply_pert ('snoalb',pert,print_flag, snoalb(nb,i), ierr,p,min_bound, max_bound)
+                     endif
                 case('emi')  ! emissivity
                      if (param_update_flag) then
                          p =5.
@@ -202,7 +209,7 @@ module lndp_apply_perts_mod
                          ! lndp_prt_list(v) = 0.1 (wrf)
                          pert = sfc_wts(nb,i,v)*lndp_prt_list(v)
                          call apply_pert ('semis',pert,print_flag, semis(nb,i), ierr,p,min_bound, max_bound)
-
+                     endif
                 case default 
                     print*, &
                      'ERROR: unrecognised lndp_prt_list option in lndp_apply_pert, exiting', trim(lndp_var_list(v)) 
