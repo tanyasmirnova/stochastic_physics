@@ -77,30 +77,36 @@ module lndp_apply_perts_mod
         !-- RUC lsm
         real(kind=kind_dbl_prec), dimension(9), parameter :: smc_vertscale_ruc = (/1.0,0.9,0.8,0.6,0.4,0.2,0.1,0.05,0./)
         real(kind=kind_dbl_prec), dimension(9), parameter :: stc_vertscale_ruc = (/1.0,0.9,0.8,0.6,0.4,0.2,0.1,0.05,0./)
-        real(kind=kind_dbl_prec), parameter                   :: minsmc = 0.02
+        real(kind=kind_dbl_prec), parameter               :: minsmc = 0.02
 
         ierr = 0 
 
-        if (lsm .NE. 1 .or. lsm .ne. lsm_ruc) then 
+        if (lsm .NE. 1 .and. lsm .ne. lsm_ruc) then 
                 write(6,*) 'ERROR: lndp_apply_pert assumes LSM is noah or ruc, ', & 
                             ' may need to adapt variable names for a different LSM'
                 ierr=10 
                 return 
         endif
 
+        write (0,*) 'Input to lndp_apply_pert'
+        write (0,*) 'lsm, lsoil, lsm_ruc, lsoil_lsm =', lsm, lsoil, lsm_ruc, lsoil_lsm
+        write (0,*) 'dzs_lsm =', dzs_lsm
+        write (0,*) 'n_var_lndp, lndp_var_list =', n_var_lndp, lndp_var_list
+        write (0,*) 'maxsmc, maxsmc_lsm =', maxsmc, maxsmc_lsm
+
         zslayer(:) = 0.
         smc_vertscale(:) = 0.
         stc_vertscale(:) = 0.
         if (lsm == 1) then
           nsoil = lsoil
-          do k = 1, lsoil
+          do k = 1, nsoil
             zslayer(k) = zs_noah(k)
             smc_vertscale(k) = smc_vertscale_noah(k)
             stc_vertscale(k) = stc_vertscale_noah(k)
           enddo
         elseif (lsm == lsm_ruc) then
           nsoil = lsoil_lsm
-          do k = 1, lsoil_lsm
+          do k = 1, nsoil
             zslayer(k) = dzs_lsm(k)
             smc_vertscale(k) = smc_vertscale_ruc(k)
             stc_vertscale(k) = stc_vertscale_ruc(k)
@@ -133,6 +139,7 @@ module lndp_apply_perts_mod
                 ! State updates - performed every cycle
                 !=================================================================
                 case('smc') 
+                write (0,*) 'smc pert'
                     p=5. 
                     soiltyp  = int( stype(nb,i)+0.5 )  ! also need for maxsmc
                     min_bound = minsmc
@@ -149,7 +156,7 @@ module lndp_apply_perts_mod
                          pert = pert*dtf/3600. ! lndp_prt_list input is per hour, convert to per timestep 
                                                      ! (necessary for state vars only)
                          call apply_pert('smc',pert,print_flag, smc(nb,i,k),ierr,p,min_bound, max_bound)
-
+             
                          ! assign all of applied pert to the liquid soil moisture 
                          slc(nb,i,k)  =  smc(nb,i,k) -  tmp_sic
                     enddo
